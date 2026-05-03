@@ -21,57 +21,66 @@ $MSYS2Dir = "C:\msys64"
 $UCRT64Bin = "$MSYS2Dir\ucrt64\bin"
 $bash = "$MSYS2Dir\usr\bin\bash.exe"
 
-Write-Host "Starting Full MSYS2 + GCC Installation..." -ForegroundColor Cyan
+Write-Host "Starting Fully Automatic Installation..." -ForegroundColor Cyan
 
-# Install MSYS2 if not present
+# Automatic MSYS2 Installation
 if (!(Test-Path $bash)) {
-    Write-Host "Downloading MSYS2 installer..." -ForegroundColor Cyan
+    Write-Host "Downloading MSYS2 installer..." -ForegroundColor Yellow
     $url = "https://github.com/msys2/msys2-installer/releases/latest/download/msys2-x86_64-latest.exe"
     $installer = "$env:TEMP\msys2-installer.exe"
-    Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
     
-    Write-Host "Running installer (this may take a minute)..." -ForegroundColor Yellow
-    Start-Process -FilePath $installer -ArgumentList "--root `"$MSYS2Dir`" --confirm" -Wait
+    Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+
+    Write-Host "Installing MSYS2 automatically (silent mode)..." -ForegroundColor Yellow
+    # Silent installation with no GUI prompts
+    Start-Process -FilePath $installer -ArgumentList "--root `"$MSYS2Dir`" --confirm --silent" -Wait -NoNewWindow
 }
 
 if (!(Test-Path $bash)) {
-    Write-Host "MSYS2 installation failed." -ForegroundColor Red
+    Write-Host "Failed to install MSYS2 automatically." -ForegroundColor Red
+    Write-Host "Please install MSYS2 manually from: https://www.msys2.org" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "MSYS2 is ready. Now installing toolchain..." -ForegroundColor Green
+Write-Host "MSYS2 installed successfully." -ForegroundColor Green
 
-# Run full installation with multiple attempts and visible output
+# Install GCC Toolchain
+Write-Host "Installing GCC, G++, and development tools..." -ForegroundColor Cyan
+
 $commands = @(
     "pacman -Syu --noconfirm",
     "pacman -Su --noconfirm",
-    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain",
-    "pacman -S --needed --noconfirm base-devel git mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gdb"
+    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain base-devel git",
+    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gdb"
 )
 
 foreach ($cmd in $commands) {
-    Write-Host "Running: $cmd" -ForegroundColor Cyan
-    $output = & $bash -lc $cmd 2>&1
-    Write-Host $output -ForegroundColor White
+    Write-Host "Running: $cmd" -ForegroundColor Magenta
+    & $bash -lc $cmd
 }
 
-# Final check
+# Final Check
 if (Test-Path "$UCRT64Bin\gcc.exe") {
-    Write-Host "`nSUCCESS! GCC and G++ are installed." -ForegroundColor Green
-    Write-Host "Files found in: $UCRT64Bin" -ForegroundColor Green
+    Write-Host @"
+
+╔══════════════════════════════════════════════════════════════╗
+║           GCC INSTALLATION COMPLETED SUCCESSFULLY!           ║
+╚══════════════════════════════════════════════════════════════╝
+"@ -ForegroundColor Green
+    Write-Host "GCC Path → $UCRT64Bin\gcc.exe" -ForegroundColor Green
 } else {
-    Write-Host "`nStill no gcc.exe. Trying one more time..." -ForegroundColor Yellow
-    & $bash -lc "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain"
+    Write-Host "GCC not found. Try running the script again or use MSYS2 UCRT64 terminal." -ForegroundColor Yellow
 }
 
-# Add to PATH
+# Update PATH
 $path = [Environment]::GetEnvironmentVariable("Path","User")
 if ($path -notlike "*$UCRT64Bin*") {
-    [Environment]::SetEnvironmentVariable("Path","$path;$UCRT64Bin","User")
-    Write-Host "PATH updated" -ForegroundColor Green
+    [Environment]::SetEnvironmentVariable("Path", "$path;$UCRT64Bin", "User")
+    Write-Host "PATH Updated Successfully" -ForegroundColor Green
 }
 
-Write-Host "`nScript finished." -ForegroundColor Green
-Write-Host "Please close this window and open a NEW PowerShell to test:" -ForegroundColor Yellow
-Write-Host "   gcc --version" -ForegroundColor Cyan
-Write-Host "   g++ --version" -ForegroundColor Cyan
+Write-Host "`nPlease CLOSE this window and open a NEW PowerShell window." -ForegroundColor Yellow
+Write-Host "Then test with:" -ForegroundColor Cyan
+Write-Host "   gcc --version" 
+Write-Host "   g++ --version" 
+Write-Host "`nMade by Shams 💙" -ForegroundColor Magenta
