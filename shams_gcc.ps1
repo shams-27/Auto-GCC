@@ -27,18 +27,30 @@ Write-Host "Downloading latest GCC/G++ (winlibs)..." -ForegroundColor Cyan
 $Url = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile = "$env:TEMP\winlibs.zip"
 
-# Disable default progress bar
-$ProgressPreference = 'SilentlyContinue'
+# Real-time Progress Bar
+$ProgressPreference = 'Continue'
 
-Write-Host "Downloading GCC/G++ " -NoNewline
-$WebClient = New-Object System.Net.WebClient
-$WebClient.DownloadFile($Url, $ZipFile)
-
-# Simple animated progress
-for ($i = 1; $i -le 20; $i++) {
-    Write-Host "." -NoNewline -ForegroundColor Yellow
-    Start-Sleep -Milliseconds 80
+function Show-Progress {
+    param([long]$BytesReceived, [long]$TotalBytes)
+    $percent = [math]::Round(($BytesReceived / $TotalBytes) * 100)
+    $bar = "█" * [math]::Floor($percent / 5)
+    $spaces = " " * (20 - $bar.Length)
+    Write-Host "`rDownloading: [$bar$spaces] $percent% ($([math]::Round($BytesReceived/1MB))MB / $([math]::Round($TotalBytes/1MB))MB)" -NoNewline
 }
+
+$WebClient = New-Object System.Net.WebClient
+$WebClient.add_DownloadProgressChanged({
+    Show-Progress $_.BytesReceived $_.TotalBytesToReceive
+})
+$WebClient.add_DownloadFileCompleted({
+    Write-Host "`nDownload Completed!" -ForegroundColor Green
+})
+
+$WebClient.DownloadFileAsync([Uri]$Url, $ZipFile)
+
+# Wait for download to complete
+while ($WebClient.IsBusy) { Start-Sleep -Milliseconds 500 }
+
 Write-Host " Done!" -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
