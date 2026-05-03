@@ -1,5 +1,5 @@
 # ================================================
-# shams_gcc.ps1 - Full Reliable MSYS2 + GCC Installer
+# shams_gcc.ps1 - SHAMS GCC Installer
 # ================================================
 
 Write-Host @"
@@ -20,28 +20,30 @@ Write-Host @"
 $MSYS2Dir = "C:\msys64"
 $UCRT64Bin = "$MSYS2Dir\ucrt64\bin"
 $bash = "$MSYS2Dir\usr\bin\bash.exe"
+$installerPath = "$env:TEMP\msys2-installer.exe"   # ← This was missing
 
 Write-Host "Starting Fully Automatic Installation..." -ForegroundColor Cyan
 
 # Clean old installer
-if (Test-Path $installerPath) { Remove-Item $installerPath -Force }
+if (Test-Path $installerPath) { 
+    Remove-Item $installerPath -Force -ErrorAction SilentlyContinue 
+}
 
 # Automatic MSYS2 Installation
 if (!(Test-Path $bash)) {
     Write-Host "Downloading MSYS2 installer..." -ForegroundColor Yellow
     $url = "https://github.com/msys2/msys2-installer/releases/latest/download/msys2-x86_64-latest.exe"
-    $installer = "$env:TEMP\msys2-installer.exe"
+    $installer = $installerPath   # ← Fixed: Use consistent variable
     
     Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
 
-    Write-Host "Installing MSYS2 automatically ..." -ForegroundColor Yellow
-    # Silent installation with no GUI prompts
-    Start-Process -FilePath $installerPath -ArgumentList "/S /D=$MSYS2Dir" -Wait -NoNewWindow
-    Start-Sleep -Seconds 8
+    Write-Host "Installing MSYS2 automatically..." -ForegroundColor Yellow
+    Start-Process -FilePath $installer -ArgumentList "--root `"$MSYS2Dir`" --confirm" -Wait -NoNewWindow
+    Start-Sleep -Seconds 5
 }
 
 if (!(Test-Path $bash)) {
-    Write-Host "Silent install failed. Trying alternative method..." -ForegroundColor Yellow
+    Write-Host "Silent install failed. Trying alternative..." -ForegroundColor Yellow
     Start-Process -FilePath $installerPath -ArgumentList "--root `"$MSYS2Dir`" --confirm" -Wait -NoNewWindow
 }
 
@@ -77,7 +79,7 @@ if (Test-Path "$UCRT64Bin\gcc.exe") {
 "@ -ForegroundColor Green
     Write-Host "GCC Path → $UCRT64Bin\gcc.exe" -ForegroundColor Green
 } else {
-    Write-Host "GCC not found. Try running the script again or use MSYS2 UCRT64 terminal." -ForegroundColor Yellow
+    Write-Host "GCC not found. Try running again or use MSYS2 UCRT64 terminal." -ForegroundColor Yellow
 }
 
 # Update PATH
