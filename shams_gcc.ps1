@@ -23,6 +23,9 @@ $bash = "$MSYS2Dir\usr\bin\bash.exe"
 
 Write-Host "Starting Fully Automatic Installation..." -ForegroundColor Cyan
 
+# Clean old installer
+if (Test-Path $installerPath) { Remove-Item $installerPath -Force }
+
 # Automatic MSYS2 Installation
 if (!(Test-Path $bash)) {
     Write-Host "Downloading MSYS2 installer..." -ForegroundColor Yellow
@@ -31,9 +34,15 @@ if (!(Test-Path $bash)) {
     
     Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
 
-    Write-Host "Installing MSYS2 automatically (silent mode)..." -ForegroundColor Yellow
+    Write-Host "Installing MSYS2 automatically ..." -ForegroundColor Yellow
     # Silent installation with no GUI prompts
-    Start-Process -FilePath $installer -ArgumentList "--root `"$MSYS2Dir`" --confirm --silent" -Wait -NoNewWindow
+    Start-Process -FilePath $installerPath -ArgumentList "/S /D=$MSYS2Dir" -Wait -NoNewWindow
+    Start-Sleep -Seconds 8
+}
+
+if (!(Test-Path $bash)) {
+    Write-Host "Silent install failed. Trying alternative method..." -ForegroundColor Yellow
+    Start-Process -FilePath $installerPath -ArgumentList "--root `"$MSYS2Dir`" --confirm" -Wait -NoNewWindow
 }
 
 if (!(Test-Path $bash)) {
@@ -50,8 +59,7 @@ Write-Host "Installing GCC, G++, and development tools..." -ForegroundColor Cyan
 $commands = @(
     "pacman -Syu --noconfirm",
     "pacman -Su --noconfirm",
-    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain base-devel git",
-    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gdb"
+    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain base-devel git"
 )
 
 foreach ($cmd in $commands) {
