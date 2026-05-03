@@ -1,76 +1,62 @@
 # ================================================
-# shams_gcc.ps1 - Robust MSYS2 + GCC/G++ Installer
-# Improved version with better feedback
+# shams_gcc.ps1 - Full Reliable MSYS2 + GCC Installer
 # ================================================
 
-param(
-    [switch]$SystemWide = $false
-)
-
-$MSYS2Dir = if ($SystemWide) { "C:\msys64" } else { "$env:USERPROFILE\msys64" }
+$MSYS2Dir = "C:\msys64"
 $UCRT64Bin = "$MSYS2Dir\ucrt64\bin"
+$bash = "$MSYS2Dir\usr\bin\bash.exe"
 
-Write-Host "Starting MSYS2 + GCC/G++ Installation..." -ForegroundColor Cyan
+Write-Host "Starting Full MSYS2 + GCC Installation..." -ForegroundColor Cyan
 
-# Install MSYS2
-if (Get-Command winget -ErrorAction SilentlyContinue) {
-    Write-Host "Installing MSYS2 via winget..." -ForegroundColor Cyan
-    winget install --id MSYS2.MSYS2 -e --accept-source-agreements --accept-package-agreements --force
-} else {
-    Write-Host "Downloading MSYS2 installer..." -ForegroundColor Yellow
+# Install MSYS2 if not present
+if (!(Test-Path $bash)) {
+    Write-Host "Downloading MSYS2 installer..." -ForegroundColor Cyan
     $url = "https://github.com/msys2/msys2-installer/releases/latest/download/msys2-x86_64-latest.exe"
     $installer = "$env:TEMP\msys2-installer.exe"
     Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+    
+    Write-Host "Running installer (this may take a minute)..." -ForegroundColor Yellow
     Start-Process -FilePath $installer -ArgumentList "--root `"$MSYS2Dir`" --confirm" -Wait
 }
 
-$bash = "$MSYS2Dir\usr\bin\bash.exe"
-
 if (!(Test-Path $bash)) {
-    Write-Host "MSYS2 installation failed. bash.exe not found." -ForegroundColor Red
+    Write-Host "MSYS2 installation failed." -ForegroundColor Red
     exit 1
 }
 
-Write-Host "MSYS2 found. Updating system..." -ForegroundColor Green
+Write-Host "MSYS2 is ready. Now installing toolchain..." -ForegroundColor Green
 
-# Update MSYS2 with visible output
-& $bash -lc "pacman -Syu --noconfirm"
-& $bash -lc "pacman -Su --noconfirm"
+# Run full installation with multiple attempts and visible output
+$commands = @(
+    "pacman -Syu --noconfirm",
+    "pacman -Su --noconfirm",
+    "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain",
+    "pacman -S --needed --noconfirm base-devel git mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gdb"
+)
 
-Write-Host "Installing GCC/G++ and development tools..." -ForegroundColor Cyan
+foreach ($cmd in $commands) {
+    Write-Host "Running: $cmd" -ForegroundColor Cyan
+    $output = & $bash -lc $cmd 2>&1
+    Write-Host $output -ForegroundColor White
+}
 
-# Main installation with full output
-$packages = "mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja " +
-            "mingw-w64-ucrt-x86_64-gdb git base-devel mingw-w64-ucrt-x86_64-make"
-
-$result = & $bash -lc "pacman -S --needed --noconfirm $packages"
-
-Write-Host $result -ForegroundColor White
-
-# Check if installation succeeded
+# Final check
 if (Test-Path "$UCRT64Bin\gcc.exe") {
-    Write-Host "GCC/G++ installed successfully!" -ForegroundColor Green
+    Write-Host "`nSUCCESS! GCC and G++ are installed." -ForegroundColor Green
+    Write-Host "Files found in: $UCRT64Bin" -ForegroundColor Green
 } else {
-    Write-Host "gcc.exe not found. Retrying installation..." -ForegroundColor Yellow
+    Write-Host "`nStill no gcc.exe. Trying one more time..." -ForegroundColor Yellow
     & $bash -lc "pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-toolchain"
 }
 
 # Add to PATH
-$target = if ($SystemWide) { "Machine" } else { "User" }
-$path = [Environment]::GetEnvironmentVariable("Path", $target)
-
+$path = [Environment]::GetEnvironmentVariable("Path","User")
 if ($path -notlike "*$UCRT64Bin*") {
-    [Environment]::SetEnvironmentVariable("Path", "$path;$UCRT64Bin", $target)
-    Write-Host "Added to PATH: $UCRT64Bin" -ForegroundColor Green
+    [Environment]::SetEnvironmentVariable("Path","$path;$UCRT64Bin","User")
+    Write-Host "PATH updated" -ForegroundColor Green
 }
 
-Write-Host "`nInstallation Process Completed!" -ForegroundColor Green
-Write-Host "GCC Path : $UCRT64Bin\gcc.exe" -ForegroundColor Green
-
-Write-Host "`nNext Steps:" -ForegroundColor Yellow
-Write-Host "1. Close this PowerShell window completely."
-Write-Host "2. Open a NEW PowerShell window and test:"
+Write-Host "`nScript finished." -ForegroundColor Green
+Write-Host "Please close this window and open a NEW PowerShell to test:" -ForegroundColor Yellow
 Write-Host "   gcc --version" -ForegroundColor Cyan
 Write-Host "   g++ --version" -ForegroundColor Cyan
-
-Write-Host "`nYou can also use the 'MSYS2 UCRT64' shortcut from Start Menu." -ForegroundColor Cyan
