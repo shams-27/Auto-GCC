@@ -13,7 +13,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-Write-Host "Auto GCC Installer" -ForegroundColor Cyan
+Write-Host "`nAuto GCC Installer" -ForegroundColor Cyan
 Write-Host "====================================`n" -ForegroundColor Cyan
 
 $InstallDir = "C:\mingw64"
@@ -21,74 +21,60 @@ $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
 
-# ------------------------------------------------
-# Shared spinner function
-# ------------------------------------------------
-function Show-Spinner {
-    param([scriptblock]$Job, [string]$Label)
-
-    $job = Start-Job -ScriptBlock $Job
-    $spinner = @('|', '/', '-', '\')
-    $i = 0
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-
-    while ($job.State -eq 'Running') {
-        $elapsed = "{0:mm\:ss}" -f [timespan]::FromSeconds($timer.Elapsed.TotalSeconds)
-        $line = "  {0}  {1}  [{2}]" -f $spinner[$i % 4], $Label, $elapsed
-        Write-Host ("`r" + $line.PadRight(60)) -NoNewline -ForegroundColor Yellow
-        $i++
-        Start-Sleep -Milliseconds 200
-    }
-
-    $timer.Stop()
-    Receive-Job $job -ErrorAction Stop | Out-Null
-    Remove-Job $job
-    Write-Host ("`r  Done!".PadRight(60)) -ForegroundColor Green
-}
-
-# ------------------------------------------------
-# Download (custom — needs MB counter)
-# ------------------------------------------------
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
+# Run download in a background job so we can show a spinner
 $job = Start-Job -ScriptBlock {
     param($u, $z)
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
+# Spinner loop on the main thread
 $spinner = @('|', '/', '-', '\')
 $i = 0
 while ($job.State -eq 'Running') {
     $sizeMB = if (Test-Path $ZipFile) {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
-    $line = "  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB
-    Write-Host ("`r" + $line.PadRight(60)) -NoNewline -ForegroundColor Yellow
+
+    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
-Write-Host ("`r  Done!".PadRight(60)) -ForegroundColor Green
 
-# ------------------------------------------------
-# Extract
-# ------------------------------------------------
+Write-Host "`r  Done!                              " -ForegroundColor Green
+
 Write-Host "Extracting..." -ForegroundColor Cyan
 
-Show-Spinner -Label "Extracting files..." -Job {
+$job = Start-Job -ScriptBlock {
     param($z, $d)
-    $ProgressPreference = 'SilentlyContinue'
     Expand-Archive -Path $z -DestinationPath $d -Force
+} -ArgumentList $ZipFile, $InstallDir
+ 
+$spinner = @('|', '/', '-', '\')
+$i = 0
+while ($job.State -eq 'Running') {
+    $fileCount = if (Test-Path $InstallDir) {
+        (Get-ChildItem $InstallDir -Recurse -File -ErrorAction SilentlyContinue).Count
+    } else { 0 }
+ 
+    if ($i -gt 0) { [Console]::Write("$([char]27)[1A") }
+    Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $fileCount) -NoNewline -ForegroundColor Yellow
+    $i++
+    Start-Sleep -Milliseconds 200
 }
+ 
+Receive-Job $job -ErrorAction Stop | Out-Null
+Remove-Job $job
+Write-Host "`r  Done!                              " -ForegroundColor Green
 
-Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
+Remove-Item $ZipFile -Force
 
-# ------------------------------------------------
 # Add to PATH
-# ------------------------------------------------
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($CurrentPath -notlike "*$BinPath*") {
     [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
@@ -99,4 +85,4 @@ Write-Host "`nInstallation Completed!" -ForegroundColor Green
 Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
-Write-Host "   g++ --version"
+Write-Host "   g++ --version`n"
