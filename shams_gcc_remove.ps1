@@ -13,8 +13,6 @@ param(
 
     [switch]$Force,
 
-    [switch]$DeleteFiles,
-
     [string[]]$ExtraPath
 )
 
@@ -320,39 +318,37 @@ if ($shouldApplyPath) {
     Write-Host "PATH removal skipped by user." -ForegroundColor Yellow
 }
 
-if ($DeleteFiles) {
-    Write-Host ""
-    Write-Host "[TOOLCHAIN FOLDER REMOVAL]" -ForegroundColor Cyan
-    $roots = Get-ToolchainRoots -BinDirs $gccBinDirs
+Write-Host ""
+Write-Host "[TOOLCHAIN FOLDER REMOVAL]" -ForegroundColor Cyan
+$roots = Get-ToolchainRoots -BinDirs $gccBinDirs
 
-    if (@($roots).Count -eq 0) {
-        Write-Host "  No candidate folders detected."
-    } else {
-        Write-Host "  Candidate folders:"
-        $roots | ForEach-Object { Write-Host "    - $_" }
+if (@($roots).Count -eq 0) {
+    Write-Host "  No candidate folders detected."
+} else {
+    Write-Host "  Candidate folders:"
+    $roots | ForEach-Object { Write-Host "    - $_" }
 
-        $shouldDelete = $Force
-        if (-not $Force) {
-            Write-Host ""
-            $shouldDelete = Confirm-YesNo -PromptText "Delete these toolchain folders from disk?" -DefaultNo
-        }
+    $shouldDelete = $Force
+    if (-not $Force) {
+        Write-Host ""
+        $shouldDelete = Confirm-YesNo -PromptText "Delete these toolchain folders from disk?" -DefaultNo
+    }
 
-        if ($shouldDelete) {
-            foreach ($root in $roots) {
-                if (-not (Test-Path -LiteralPath $root)) {
-                    Write-Host "  not found    $root"
-                    continue
-                }
-                try {
-                    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
-                    Write-Host "  deleted      $root" -ForegroundColor Green
-                } catch {
-                    Write-Warning "  failed       $root ($($_.Exception.Message))"
-                }
+    if ($shouldDelete) {
+        foreach ($root in $roots) {
+            if (-not (Test-Path -LiteralPath $root)) {
+                Write-Host "  not found    $root"
+                continue
             }
-        } else {
-            Write-Host "  Folder deletion skipped by user." -ForegroundColor Yellow
+            try {
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
+                Write-Host "  deleted      $root" -ForegroundColor Green
+            } catch {
+                Write-Warning "  failed       $root ($($_.Exception.Message))"
+            }
         }
+    } else {
+        Write-Host "  Folder deletion skipped by user." -ForegroundColor Yellow
     }
 }
 
