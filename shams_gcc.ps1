@@ -52,7 +52,7 @@ try {
                 $speedMBps = ($totalRead / 1MB) / $elapsedSeconds
                 if ($totalBytes -gt 0) {
                     $pct = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
-                    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
+                    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' `
                         -Status ("{0}% | {1:N1} MB/s" -f $pct, $speedMBps) `
                         -PercentComplete $pct
                 } else {
