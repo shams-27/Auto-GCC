@@ -102,8 +102,28 @@ if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
 # Add to PATH
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($CurrentPath -notlike "*$BinPath*") {
-    [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
-    Write-Host "`nPATH Updated" -ForegroundColor Green
+    Write-Host ""
+    $pathSteps = 22
+    $applyAt = [math]::Ceiling($pathSteps / 2)
+    $applied = $false
+    for ($s = 1; $s -le $pathSteps; $s++) {
+        if (-not $applied -and $s -ge $applyAt) {
+            [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
+            $applied = $true
+        }
+        $pct = [math]::Min(100, [int](100 * $s / $pathSteps))
+        $status = if ($s -lt $applyAt) { 'Preparing user PATH...' } else { 'Writing PATH change...' }
+        Write-Progress -Activity 'Updating user PATH' `
+            -Status $status `
+            -CurrentOperation $BinPath `
+            -PercentComplete $pct
+        Start-Sleep -Milliseconds 38
+    }
+    if (-not $applied) {
+        [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
+    }
+    Write-Progress -Activity 'Updating user PATH' -Completed
+    Write-Host "PATH Updated" -ForegroundColor Green
 }
 
 Write-Host "Installation Completed!" -ForegroundColor Green
