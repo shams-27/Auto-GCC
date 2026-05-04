@@ -15,9 +15,9 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║     Auto Mingw-w64 Solution      ║" -ForegroundColor Cyan
-Write-Host "  ╚══════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  ╔═════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "  ║     Auto Mingw-w64 Solution     ║" -ForegroundColor Cyan
+Write-Host "  ╚═════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
 # Use PowerShell 7+ minimal progress rendering when available.
