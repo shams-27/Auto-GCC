@@ -46,15 +46,14 @@ while ($job.State -eq 'Running') {
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-Write-Host "`r  Done!                              " -ForegroundColor Green
+Write-Host "`n`r  Done!                              " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
-Remove-Item $ZipFile -Force
 
-Write-Host "`r  Done!                              " -ForegroundColor Green
+Write-Host "`n`r  Done!                              " -ForegroundColor Green
 
-Remove-Item $ZipFile -Force
+if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
 
 # Add to PATH
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
