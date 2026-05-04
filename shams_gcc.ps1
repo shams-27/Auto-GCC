@@ -30,6 +30,9 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
+# Hide cursor during download
+[Console]::CursorVisible = $false
+
 # Spinner loop on the main thread
 $spinner = @('|', '/', '-', '\')
 $i = 0
@@ -42,6 +45,9 @@ while ($job.State -eq 'Running') {
     $i++
     Start-Sleep -Milliseconds 200
 }
+
+# Restore cursor
+[Console]::CursorVisible = $true
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
