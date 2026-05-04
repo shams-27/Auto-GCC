@@ -59,11 +59,12 @@ if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($CurrentPath -notlike "*$BinPath*") {
     [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
-    Write-Host "PATH Updated" -ForegroundColor Green
+    Write-Host "`nPATH Updated" -ForegroundColor Green
 }
 
-Write-Host "`nInstallation Completed!" -ForegroundColor Green
+Write-Host "Installation Completed!" -ForegroundColor Green
 Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version`n"
+Write-Host "`nMade by Shams`n"
