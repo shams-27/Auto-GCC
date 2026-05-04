@@ -22,7 +22,32 @@ $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/
 $ZipFile    = "$env:TEMP\winlibs.zip"
 
 # ------------------------------------------------
-# Download
+# Shared spinner function
+# ------------------------------------------------
+function Show-Spinner {
+    param([scriptblock]$Job, [string]$Label)
+
+    $job = Start-Job -ScriptBlock $Job
+    $spinner = @('|', '/', '-', '\')
+    $i = 0
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+
+    while ($job.State -eq 'Running') {
+        $elapsed = "{0:mm\:ss}" -f [timespan]::FromSeconds($timer.Elapsed.TotalSeconds)
+        $line = "  {0}  {1}  [{2}]" -f $spinner[$i % 4], $Label, $elapsed
+        Write-Host ("`r" + $line.PadRight(60)) -NoNewline -ForegroundColor Yellow
+        $i++
+        Start-Sleep -Milliseconds 200
+    }
+
+    $timer.Stop()
+    Receive-Job $job -ErrorAction Stop | Out-Null
+    Remove-Job $job
+    Write-Host ("`r  Done!".PadRight(60)) -ForegroundColor Green
+}
+
+# ------------------------------------------------
+# Download (custom — needs MB counter)
 # ------------------------------------------------
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
@@ -38,61 +63,28 @@ while ($job.State -eq 'Running') {
     $sizeMB = if (Test-Path $ZipFile) {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
-    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
+    $line = "  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB
+    Write-Host ("`r" + $line.PadRight(60)) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
-Write-Host "`r  Done!                              " -ForegroundColor Green
+Write-Host ("`r  Done!".PadRight(60)) -ForegroundColor Green
 
 # ------------------------------------------------
 # Extract
 # ------------------------------------------------
 Write-Host "Extracting..." -ForegroundColor Cyan
 
-# Use a counter file that the job updates so main thread just reads a number
-$CounterFile = "$env:TEMP\shams_extract_count.txt"
-"0" | Set-Content $CounterFile
-
-$job = Start-Job -ScriptBlock {
-    param($z, $d, $c)
+Show-Spinner -Label "Extracting files..." -Job {
+    param($z, $d)
     $ProgressPreference = 'SilentlyContinue'
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $zip = [System.IO.Compression.ZipFile]::OpenRead($z)
-    $total = $zip.Entries.Count
-    $count = 0
-    foreach ($entry in $zip.Entries) {
-        $destPath = Join-Path $d $entry.FullName
-        if ($entry.FullName.EndsWith('/')) {
-            New-Item -ItemType Directory -Path $destPath -Force | Out-Null
-        } else {
-            $dir = Split-Path $destPath
-            if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-        }
-        $count++
-        "$count/$total" | Set-Content $c
-    }
-    $zip.Dispose()
-} -ArgumentList $ZipFile, $InstallDir, $CounterFile
-
-$spinner = @('|', '/', '-', '\')
-$i = 0
-while ($job.State -eq 'Running') {
-    $info = if (Test-Path $CounterFile) { Get-Content $CounterFile -ErrorAction SilentlyContinue } else { "0/0" }
-    Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $info) -NoNewline -ForegroundColor Yellow
-    $i++
-    Start-Sleep -Milliseconds 200
+    Expand-Archive -Path $z -DestinationPath $d -Force
 }
 
-Receive-Job $job -ErrorAction Stop | Out-Null
-Remove-Job $job
-Remove-Item $CounterFile -Force -ErrorAction SilentlyContinue
-Write-Host "`r  Done!                              " -ForegroundColor Green
-
-Remove-Item $ZipFile -Force
+Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
 
 # ------------------------------------------------
 # Add to PATH
