@@ -69,7 +69,7 @@ try {
         $response.Dispose()
     }
 } finally {
-    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' -Completed
+    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' -Completed
 }
 
 Write-Host "  Download finished." -ForegroundColor Green
