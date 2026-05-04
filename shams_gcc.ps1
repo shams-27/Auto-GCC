@@ -23,17 +23,15 @@ $ZipFile    = "$env:TEMP\winlibs.zip"
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
-# Hide cursor during download
-[Console]::CursorVisible = $false
-
-# Run download in a background job so we can show a spinner
 $job = Start-Job -ScriptBlock {
     param($u, $z)
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-# Spinner loop on the main thread
+# Hide cursor via ANSI escape (works in piped/iex context unlike Console API)
+Write-Host -NoNewline "`e[?25l"
+
 $spinner = @('|', '/', '-', '\')
 $i = 0
 while ($job.State -eq 'Running') {
@@ -45,6 +43,9 @@ while ($job.State -eq 'Running') {
     $i++
     Start-Sleep -Milliseconds 200
 }
+
+# Restore cursor via ANSI escape
+Write-Host -NoNewline "`e[?25h"
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
@@ -67,6 +68,3 @@ Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version `n"
-
-# Restore cursor
-[Console]::CursorVisible = $true
