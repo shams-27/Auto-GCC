@@ -52,6 +52,7 @@ Write-Host "Extracting..." -ForegroundColor Cyan
 
 $job = Start-Job -ScriptBlock {
     param($z, $d)
+    $ProgressPreference = 'SilentlyContinue'
     Expand-Archive -Path $z -DestinationPath $d -Force
 } -ArgumentList $ZipFile, $InstallDir
  
