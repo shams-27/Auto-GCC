@@ -29,20 +29,16 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-$spinner = @('|', '/', '-', '\')
+# Spinner chars: cursor blends in naturally when it sits after '|', '-', '/'
+$spinner = @('|', '|/', '|/-', '|/-\')
 $i = 0
-# Get console width, default 120 if unavailable
-$width = try { [Console]::WindowWidth } catch { 120 }
-
 while ($job.State -eq 'Running') {
     $sizeMB = if (Test-Path $ZipFile) {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    $text = "  $($spinner[$i % 4])  $sizeMB downloaded..."
-    # Pad to full console width - 1 so cursor wraps off the visible line
-    $padded = $text.PadRight($width - 1)
-    Write-Host "`r$padded" -NoNewline -ForegroundColor Yellow
+    # Cursor sits right after the last spinner char — visually blends in
+    Write-Host ("`r  {0} MB downloaded  {1}" -f $sizeMB, $spinner[$i % 4]) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
@@ -50,8 +46,7 @@ while ($job.State -eq 'Running') {
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-$done = "  Done!".PadRight($width - 1)
-Write-Host "`r$done" -ForegroundColor Green
+Write-Host "`r  Download complete!                  " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
