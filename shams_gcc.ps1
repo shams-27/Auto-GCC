@@ -20,19 +20,31 @@ $InstallDir = "C:\mingw64"
 $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
+$TotalMB    = 652  # approximate total size
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
 $ProgressPreference = 'SilentlyContinue'
-
 $webClient = New-Object System.Net.WebClient
 $task = $webClient.DownloadFileTaskAsync($Url, $ZipFile)
 
+$lastLine = 0
 while (-not $task.IsCompleted) {
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 600
+
     if (Test-Path $ZipFile) {
-        $downloadedMB = [math]::Round((Get-Item $ZipFile).Length / 1MB, 1)
-        Write-Host "`r  $downloadedMB MB downloaded..." -NoNewline -ForegroundColor Gray
+        $dlMB  = [math]::Round((Get-Item $ZipFile).Length / 1MB, 1)
+        $pct   = [math]::Min([math]::Round($dlMB / $TotalMB * 100), 100)
+        $filled = [math]::Round($pct / 5)   # 20-char bar
+        $bar   = "#" * $filled + "-" * (20 - $filled)
+
+        # Move cursor up to overwrite previous bar line (skip on first iteration)
+        if ($lastLine -eq 1) {
+            [Console]::SetCursorPosition(0, [Console]::CursorTop - 1)
+        }
+
+        Write-Host ("  [{0}] {1,5:0.0} MB / {2} MB  ({3}%)" -f $bar, $dlMB, $TotalMB, $pct) -ForegroundColor Yellow
+        $lastLine = 1
     }
 }
 
@@ -41,7 +53,8 @@ $ProgressPreference = 'Continue'
 
 if ($task.IsFaulted) { throw $task.Exception.InnerException }
 
-Write-Host "`r  Download complete!              " -ForegroundColor Green
+[Console]::SetCursorPosition(0, [Console]::CursorTop - 1)
+Write-Host "  [####################]  $TotalMB MB / $TotalMB MB  (100%) - Done!" -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
