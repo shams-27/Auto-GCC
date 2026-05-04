@@ -143,10 +143,11 @@ Write-Host "   gcc --version"
 Write-Host "   g++ --version`n"
 
 $shamsColors = @('DarkRed', 'DarkYellow', 'DarkGreen', 'DarkCyan', 'DarkMagenta')
-$shamsLetters = 'Shams'.ToCharArray()
+$shamsLetters = 'SHAMS'.ToCharArray()
 
 Write-Host "`nMade by " -ForegroundColor Cyan -NoNewline
 for ($i = 0; $i -lt $shamsLetters.Length; $i++) {
     $isLast = ($i -eq $shamsLetters.Length - 1)
     Write-Host $shamsLetters[$i] -ForegroundColor $shamsColors[$i] -NoNewline:(-not $isLast)
 }
+Write-Host "`n"
