@@ -28,7 +28,7 @@ $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
 
-Write-Host "Downloading Mingw-w64..." -ForegroundColor Cyan
+Write-Host "Downloading..." -ForegroundColor Cyan
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $request = [System.Net.HttpWebRequest]::Create($Url)
