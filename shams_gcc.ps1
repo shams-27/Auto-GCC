@@ -21,38 +21,16 @@ $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
 
-# ------------------------------------------------
-# Reusable spinner function
-# ------------------------------------------------
-function Start-Spinner {
-    param([string]$Label, [scriptblock]$Action)
-
-    $job = Start-Job -ScriptBlock $Action
-
-    $spinner = @('|', '/', '-', '\')
-    $i = 0
-    while ($job.State -eq 'Running') {
-        Write-Host ("`r  {0}  {1}..." -f $spinner[$i % 4], $Label) -ForegroundColor Yellow
-        $i++
-        Start-Sleep -Milliseconds 200
-    }
-
-    Receive-Job $job -ErrorAction Stop | Out-Null
-    Remove-Job $job
-    Write-Host "`r  Done!                              " -ForegroundColor Green
-}
-
-# ------------------------------------------------
-# Download
-# ------------------------------------------------
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
+# Run download in a background job so we can show a spinner
 $job = Start-Job -ScriptBlock {
     param($u, $z)
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
+# Spinner loop on the main thread
 $spinner = @('|', '/', '-', '\')
 $i = 0
 while ($job.State -eq 'Running') {
@@ -60,46 +38,21 @@ while ($job.State -eq 'Running') {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -ForegroundColor Yellow
+    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
+
 Write-Host "`r  Done!                              " -ForegroundColor Green
 
-# ------------------------------------------------
-# Extract
-# ------------------------------------------------
 Write-Host "Extracting..." -ForegroundColor Cyan
-
-$job = Start-Job -ScriptBlock {
-    param($z, $d)
-    Expand-Archive -Path $z -DestinationPath $d -Force
-} -ArgumentList $ZipFile, $InstallDir
-
-$spinner = @('|', '/', '-', '\')
-$i = 0
-while ($job.State -eq 'Running') {
-    $fileCount = if (Test-Path $InstallDir) {
-        (Get-ChildItem $InstallDir -Recurse -File -ErrorAction SilentlyContinue).Count
-    } else { 0 }
-
-    Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $fileCount) -ForegroundColor Yellow
-    $i++
-    Start-Sleep -Milliseconds 200
-}
-
-Receive-Job $job -ErrorAction Stop | Out-Null
-Remove-Job $job
-Write-Host "`r  Done!                              " -ForegroundColor Green
-
+Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
 Remove-Item $ZipFile -Force
 
-# ------------------------------------------------
 # Add to PATH
-# ------------------------------------------------
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($CurrentPath -notlike "*$BinPath*") {
     [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
