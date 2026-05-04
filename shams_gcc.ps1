@@ -6,11 +6,14 @@
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Restarting as Administrator..." -ForegroundColor Yellow
-    $scriptUrl = "https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1"
-    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm '$scriptUrl' | iex`""
+    # Save this script to a temp file so it can be re-launched as admin
+    # (piped scripts can't be directly re-launched with RunAs)
+    $tempScript = "$env:TEMP\shams_gcc_temp.ps1"
+    $scriptUrl  = "https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1"
+    Invoke-RestMethod -Uri $scriptUrl -OutFile $tempScript
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`""
     exit
 }
-
 Write-Host "Auto GCC Installer" -ForegroundColor Cyan
 Write-Host "====================================`n" -ForegroundColor Cyan
 
