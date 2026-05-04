@@ -144,7 +144,7 @@ Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version`n"
 
-$shamsColors = @('Red', 'Yellow', 'Green', 'Cyan', 'Magenta')
+$shamsColors = @('DarkRed', 'DarkYellow', 'DarkGreen', 'DarkCyan', 'DarkMagenta')
 $shamsLetters = 'Shams'.ToCharArray()
 
 Write-Host "`nMade by " -ForegroundColor Cyan -NoNewline
