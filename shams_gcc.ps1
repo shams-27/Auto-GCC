@@ -29,16 +29,18 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-# Spinner chars: cursor blends in naturally when it sits after '|', '-', '/'
-$spinner = @('|', '|/', '|/-', '|/-\')
+$spinner = @('|', '/', '-', '\')
 $i = 0
 while ($job.State -eq 'Running') {
     $sizeMB = if (Test-Path $ZipFile) {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    # Cursor sits right after the last spinner char — visually blends in
-    Write-Host ("`r  {0} MB downloaded  {1}" -f $sizeMB, $spinner[$i % 4]) -NoNewline -ForegroundColor Yellow
+    # Print spinner line in yellow, then a black-on-black space so the
+    # cursor that sits there becomes invisible against the black background
+    Write-Host "`r" -NoNewline
+    Write-Host ("  {0}  {1} downloaded... " -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow -BackgroundColor Black
+    Write-Host " " -NoNewline -ForegroundColor Black -BackgroundColor Black  # cursor hider
     $i++
     Start-Sleep -Milliseconds 200
 }
@@ -46,7 +48,8 @@ while ($job.State -eq 'Running') {
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-Write-Host "`r  Download complete!                  " -ForegroundColor Green
+Write-Host "`r  Download complete!                   " -ForegroundColor Green
+Write-Host ""
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
