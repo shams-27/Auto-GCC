@@ -46,12 +46,12 @@ while ($job.State -eq 'Running') {
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-Write-Host "`r  `nDone!                              " -ForegroundColor Green
+Write-Host "`r  Done!                              " -ForegroundColor Green
 
-Write-Host "Extracting..." -ForegroundColor Cyan
+Write-Host "`nExtracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
 
-Write-Host "`r  `nDone!                              " -ForegroundColor Green
+Write-Host "`r  Done!                              " -ForegroundColor Green
 
 if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
 
