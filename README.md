@@ -6,7 +6,7 @@ Instantly installs **GCC / G++ (MinGW-w64)** on Windows with a single PowerShell
 
 ## 🚀 Quick Install
 
-Open **Windows Terminal / PowerShell** (any version) and run:
+Open **Windows Terminal / PowerShell** (any version) , copy this command and press Enter:
 
 ```powershell
 irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1 | iex
