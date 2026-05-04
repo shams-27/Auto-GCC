@@ -49,10 +49,8 @@ Remove-Job $job
 Write-Host "`r  Done!                              " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
-
-Expand-Archive -Path $z -DestinationPath $d -Force 
-Receive-Job $job -ErrorAction Stop | Out-Null
-Remove-Job $job
+Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
+Remove-Item $ZipFile -Force
 
 Write-Host "`r  Done!                              " -ForegroundColor Green
 
