@@ -29,8 +29,9 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-# Hide cursor via ANSI escape (works in piped/iex context unlike Console API)
-Write-Host -NoNewline "`e[?25l"
+# ESC character compatible with PowerShell 5.1
+$ESC = [char]27
+[Console]::Write("$ESC[?25l")   # hide cursor
 
 $spinner = @('|', '/', '-', '\')
 $i = 0
@@ -44,8 +45,7 @@ while ($job.State -eq 'Running') {
     Start-Sleep -Milliseconds 200
 }
 
-# Restore cursor via ANSI escape
-Write-Host -NoNewline "`e[?25h"
+[Console]::Write("$ESC[?25h")   # restore cursor
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
@@ -67,4 +67,4 @@ Write-Host "`nInstallation Completed!" -ForegroundColor Green
 Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
-Write-Host "   g++ --version `n"
+Write-Host "   g++ --version"
