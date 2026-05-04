@@ -23,10 +23,8 @@ $ZipFile    = "$env:TEMP\winlibs.zip"
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
-# Suppress the default byte-based progress bar
 $ProgressPreference = 'SilentlyContinue'
 
-# Start async download, then poll file size from the main thread (safe for Write-Progress)
 $webClient = New-Object System.Net.WebClient
 $task = $webClient.DownloadFileTaskAsync($Url, $ZipFile)
 
@@ -34,17 +32,16 @@ while (-not $task.IsCompleted) {
     Start-Sleep -Milliseconds 500
     if (Test-Path $ZipFile) {
         $downloadedMB = [math]::Round((Get-Item $ZipFile).Length / 1MB, 1)
-        Write-Progress -Activity "Downloading GCC/G++..." `
-                       -Status "$downloadedMB MB downloaded" `
-                       -PercentComplete -1
+        Write-Host "`r  $downloadedMB MB downloaded..." -NoNewline -ForegroundColor Gray
     }
 }
 
 $webClient.Dispose()
-Write-Progress -Activity "Downloading GCC/G++..." -Completed
 $ProgressPreference = 'Continue'
 
 if ($task.IsFaulted) { throw $task.Exception.InnerException }
+
+Write-Host "`r  Download complete!              " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
