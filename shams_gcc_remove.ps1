@@ -4,16 +4,14 @@
 # Supports common installs:
 # - MSYS2 / MinGW (ucrt64, mingw64, mingw32, clang64)
 # - WinLibs
-# - Standalone MinGW-w64 / TDM-GCC / generic gcc folders
-#
-# Safe by default: dry-run unless -Apply is passed.
+# ================================================
 
 [CmdletBinding()]
 param(
     [ValidateSet("User", "Machine", "All")]
     [string]$Scope = "All",
 
-    [switch]$Apply,
+    [switch]$Force,
 
     [switch]$DeleteFiles,
 
@@ -226,7 +224,27 @@ public static class EnvBroadcast {
     )
 }
 
-$isDryRun = -not $Apply
+function Confirm-YesNo {
+    param(
+        [string]$PromptText,
+        [switch]$DefaultNo
+    )
+
+    while ($true) {
+        $suffix = if ($DefaultNo) { "[y/N]" } else { "[Y/n]" }
+        $reply = Read-Host "$PromptText $suffix"
+        if ([string]::IsNullOrWhiteSpace($reply)) {
+            return (-not $DefaultNo)
+        }
+        switch ($reply.Trim().ToLowerInvariant()) {
+            "y" { return $true }
+            "yes" { return $true }
+            "n" { return $false }
+            "no" { return $false }
+            default { Write-Host "Please type y or n." -ForegroundColor Yellow }
+        }
+    }
+}
 
 if (($Scope -eq "Machine" -or $Scope -eq "All") -and -not (Test-IsAdmin)) {
     Write-Warning "Machine PATH edits require Administrator PowerShell."
@@ -250,10 +268,12 @@ if ($Scope -in @("User", "All")) { $targets += "User" }
 if ($Scope -in @("Machine", "All")) { $targets += "Machine" }
 
 $changedAny = $false
+$planByTarget = @{}
 
 foreach ($target in $targets) {
     $current = [Environment]::GetEnvironmentVariable("Path", $target)
     $result = Remove-MatchingPathEntries -PathValue $current -KnownBinDirs $gccBinDirs -ForceMatch $ExtraPath
+    $planByTarget[$target] = $result
 
     Write-Host ""
     Write-Host "[$target PATH]" -ForegroundColor Cyan
@@ -265,19 +285,39 @@ foreach ($target in $targets) {
 
     if (@($result.RemovedParts).Count -gt 0) {
         $changedAny = $true
-        if ($isDryRun) {
-            Write-Host "  Action: would update PATH" -ForegroundColor Yellow
-        } else {
-            try {
-                Set-PathByScope -TargetScope $target -Value $result.NewValue
-                Write-Host "  Action: updated PATH" -ForegroundColor Green
-            } catch {
-                Write-Warning "  Action: failed to update PATH ($($_.Exception.Message))"
-            }
-        }
+        Write-Host "  Action: ready to update (pending confirmation)" -ForegroundColor Yellow
     } else {
         Write-Host "  Action: no changes needed"
     }
+}
+
+$shouldApplyPath = $false
+if ($changedAny) {
+    if ($Force) {
+        $shouldApplyPath = $true
+    } else {
+        Write-Host ""
+        $shouldApplyPath = Confirm-YesNo -PromptText "Remove detected GCC-related PATH entries now?" -DefaultNo
+    }
+}
+
+if ($shouldApplyPath) {
+    foreach ($target in $targets) {
+        $result = $planByTarget[$target]
+        if (@($result.RemovedParts).Count -eq 0) { continue }
+        try {
+            Set-PathByScope -TargetScope $target -Value $result.NewValue
+            Write-Host "[$target PATH] updated." -ForegroundColor Green
+        } catch {
+            Write-Warning "[$target PATH] failed to update ($($_.Exception.Message))"
+        }
+    }
+    Send-EnvironmentChanged
+    Write-Host ""
+    Write-Host "Environment change broadcast sent." -ForegroundColor Green
+} elseif ($changedAny) {
+    Write-Host ""
+    Write-Host "PATH removal skipped by user." -ForegroundColor Yellow
 }
 
 if ($DeleteFiles) {
@@ -291,35 +331,34 @@ if ($DeleteFiles) {
         Write-Host "  Candidate folders:"
         $roots | ForEach-Object { Write-Host "    - $_" }
 
-        foreach ($root in $roots) {
-            if (-not (Test-Path -LiteralPath $root)) {
-                Write-Host "  not found    $root"
-                continue
+        $shouldDelete = $Force
+        if (-not $Force) {
+            Write-Host ""
+            $shouldDelete = Confirm-YesNo -PromptText "Delete these toolchain folders from disk?" -DefaultNo
+        }
+
+        if ($shouldDelete) {
+            foreach ($root in $roots) {
+                if (-not (Test-Path -LiteralPath $root)) {
+                    Write-Host "  not found    $root"
+                    continue
+                }
+                try {
+                    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
+                    Write-Host "  deleted      $root" -ForegroundColor Green
+                } catch {
+                    Write-Warning "  failed       $root ($($_.Exception.Message))"
+                }
             }
-            if ($isDryRun) {
-                Write-Host "  would delete $root" -ForegroundColor Yellow
-                continue
-            }
-            try {
-                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
-                Write-Host "  deleted      $root" -ForegroundColor Green
-            } catch {
-                Write-Warning "  failed       $root ($($_.Exception.Message))"
-            }
+        } else {
+            Write-Host "  Folder deletion skipped by user." -ForegroundColor Yellow
         }
     }
 }
 
-if ($changedAny -and -not $isDryRun) {
-    Send-EnvironmentChanged
-    Write-Host ""
-    Write-Host "Environment change broadcast sent." -ForegroundColor Green
-}
-
 Write-Host ""
-if ($isDryRun) {
-    Write-Host "Dry-run complete. No changes were made." -ForegroundColor Yellow
-    Write-Host "Re-run with -Apply to make changes."
-} else {
+if ($changedAny) {
     Write-Host "Done." -ForegroundColor Green
+} else {
+    Write-Host "Nothing to remove." -ForegroundColor Yellow
 }
