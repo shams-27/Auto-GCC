@@ -29,9 +29,36 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-# ESC character compatible with PowerShell 5.1
-$ESC = [char]27
-[Console]::Write("$ESC[?25l")   # hide cursor
+# Hide cursor via Win32 API (works in all PS versions and execution modes)
+$code = @"
+using System;
+using System.Runtime.InteropServices;
+public class ConsoleCursor {
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetStdHandle(int h);
+    [DllImport("kernel32.dll")]
+    static extern bool GetConsoleCursorInfo(IntPtr h, out CONSOLE_CURSOR_INFO i);
+    [DllImport("kernel32.dll")]
+    static extern bool SetConsoleCursorInfo(IntPtr h, ref CONSOLE_CURSOR_INFO i);
+    public struct CONSOLE_CURSOR_INFO { public int Size; public bool Visible; }
+    public static void Hide() {
+        var h = GetStdHandle(-11);
+        CONSOLE_CURSOR_INFO i;
+        GetConsoleCursorInfo(h, out i);
+        i.Visible = false;
+        SetConsoleCursorInfo(h, ref i);
+    }
+    public static void Show() {
+        var h = GetStdHandle(-11);
+        CONSOLE_CURSOR_INFO i;
+        GetConsoleCursorInfo(h, out i);
+        i.Visible = true;
+        SetConsoleCursorInfo(h, ref i);
+    }
+}
+"@
+Add-Type -TypeDefinition $code
+[ConsoleCursor]::Hide()
 
 $spinner = @('|', '/', '-', '\')
 $i = 0
@@ -45,7 +72,7 @@ while ($job.State -eq 'Running') {
     Start-Sleep -Milliseconds 200
 }
 
-[Console]::Write("$ESC[?25h")   # restore cursor
+[ConsoleCursor]::Show()
 
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
