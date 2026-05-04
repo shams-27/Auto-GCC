@@ -23,12 +23,14 @@ $ZipFile    = "$env:TEMP\winlibs.zip"
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
+# Run download in a background job so we can show a spinner
 $job = Start-Job -ScriptBlock {
     param($u, $z)
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
+# Spinner loop on the main thread
 $spinner = @('|', '/', '-', '\')
 $i = 0
 while ($job.State -eq 'Running') {
@@ -36,11 +38,7 @@ while ($job.State -eq 'Running') {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    # Print spinner line in yellow, then a black-on-black space so the
-    # cursor that sits there becomes invisible against the black background
-    Write-Host "`r" -NoNewline
-    Write-Host ("  {0}  {1} downloaded... " -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow -BackgroundColor Black
-    Write-Host " " -NoNewline -ForegroundColor Black -BackgroundColor Black  # cursor hider
+    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
@@ -48,8 +46,7 @@ while ($job.State -eq 'Running') {
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-Write-Host "`r  Download complete!                   " -ForegroundColor Green
-Write-Host ""
+Write-Host "`r  Done!                              " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
