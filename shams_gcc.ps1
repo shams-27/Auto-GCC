@@ -20,45 +20,36 @@ $InstallDir = "C:\mingw64"
 $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
-$TotalMB    = 652  # approximate total size
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
-$ProgressPreference = 'SilentlyContinue'
-$webClient = New-Object System.Net.WebClient
-$task = $webClient.DownloadFileTaskAsync($Url, $ZipFile)
+# Run download in a background job so we can show a spinner
+$job = Start-Job -ScriptBlock {
+    param($u, $z)
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
+} -ArgumentList $Url, $ZipFile
 
-$lastLine = 0
-while (-not $task.IsCompleted) {
-    Start-Sleep -Milliseconds 600
+# Spinner loop on the main thread
+$spinner = @('|', '/', '-', '\')
+$i = 0
+while ($job.State -eq 'Running') {
+    $sizeMB = if (Test-Path $ZipFile) {
+        "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
+    } else { "0.0 MB" }
 
-    if (Test-Path $ZipFile) {
-        $dlMB  = [math]::Round((Get-Item $ZipFile).Length / 1MB, 1)
-        $pct   = [math]::Min([math]::Round($dlMB / $TotalMB * 100), 100)
-        $filled = [math]::Round($pct / 5)   # 20-char bar
-        $bar   = "#" * $filled + "-" * (20 - $filled)
-
-        # Move cursor up to overwrite previous bar line (skip on first iteration)
-        if ($lastLine -eq 1) {
-            [Console]::SetCursorPosition(0, [Console]::CursorTop - 1)
-        }
-
-        Write-Host ("  [{0}] {1,5:0.0} MB / {2} MB  ({3}%)" -f $bar, $dlMB, $TotalMB, $pct) -ForegroundColor Yellow
-        $lastLine = 1
-    }
+    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
+    $i++
+    Start-Sleep -Milliseconds 200
 }
 
-$webClient.Dispose()
-$ProgressPreference = 'Continue'
+Receive-Job $job -ErrorAction Stop | Out-Null
+Remove-Job $job
 
-if ($task.IsFaulted) { throw $task.Exception.InnerException }
-
-[Console]::SetCursorPosition(0, [Console]::CursorTop - 1)
-Write-Host "  [####################]  $TotalMB MB / $TotalMB MB  (100%) - Done!" -ForegroundColor Green
+Write-Host "`r  Done!                              " -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
-
 Remove-Item $ZipFile -Force
 
 # Add to PATH
@@ -70,7 +61,6 @@ if ($CurrentPath -notlike "*$BinPath*") {
 
 Write-Host "`nInstallation Completed!" -ForegroundColor Green
 Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
-
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version"
