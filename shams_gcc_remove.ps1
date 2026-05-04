@@ -151,11 +151,17 @@ function Remove-MatchingPathEntries {
 }
 
 function Get-ToolchainRoots {
-    param([string[]]$BinDirs)
+    param(
+        [string[]]$BinDirs,
+        [string[]]$AdditionalPathEntries
+    )
 
     $roots = New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)
+    $sources = @()
+    if ($null -ne $BinDirs) { $sources += @($BinDirs) }
+    if ($null -ne $AdditionalPathEntries) { $sources += @($AdditionalPathEntries) }
 
-    foreach ($dir in $BinDirs) {
+    foreach ($dir in $sources) {
         $n = Normalize-PathText $dir
         if ([string]::IsNullOrWhiteSpace($n)) { continue }
 
@@ -163,13 +169,11 @@ function Get-ToolchainRoots {
         $markers = @("msys64", "winlibs", "tdm-gcc", "mingw64", "mingw32", "ucrt64", "clang64")
 
         foreach ($m in $markers) {
-            $idx = [Array]::IndexOf($parts, $m)
+            # Use the deepest match so paths like C:\mingw64\mingw64\bin
+            # resolve to C:\mingw64 (not C:).
+            $idx = [Array]::LastIndexOf($parts, $m)
             if ($idx -ge 0) {
-                if ($m -in @("mingw64", "mingw32", "ucrt64", "clang64") -and $idx -gt 0) {
-                    [void]$roots.Add(($parts[0..($idx - 1)] -join "\"))
-                } else {
-                    [void]$roots.Add(($parts[0..$idx] -join "\"))
-                }
+                [void]$roots.Add(($parts[0..$idx] -join "\"))
                 break
             }
         }
@@ -179,7 +183,25 @@ function Get-ToolchainRoots {
         }
     }
 
-    return @($roots)
+    # Fallback roots for common GCC distributions if PATH has already been cleaned.
+    $fallbackRoots = @(
+        "C:\msys64",
+        "C:\mingw64",
+        "C:\mingw32",
+        "C:\mingw",
+        "C:\winlibs",
+        "C:\tdm-gcc",
+        "$env:ProgramFiles\winlibs",
+        "$env:ProgramFiles\mingw-w64",
+        "$env:ProgramFiles(x86)\mingw-w64"
+    )
+    foreach ($candidate in $fallbackRoots) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
+            [void]$roots.Add((Normalize-PathText $candidate))
+        }
+    }
+
+    return @($roots | Where-Object { $_ -and $_ -match "^[a-zA-Z]:\\" -and $_ -ne "c:\" })
 }
 
 function Set-PathByScope {
@@ -266,6 +288,7 @@ if ($Scope -in @("User", "All")) { $targets += "User" }
 if ($Scope -in @("Machine", "All")) { $targets += "Machine" }
 
 $changedAny = $false
+$deletedAny = $false
 $planByTarget = @{}
 
 foreach ($target in $targets) {
@@ -288,6 +311,12 @@ foreach ($target in $targets) {
         Write-Host "  Action: no changes needed"
     }
 }
+
+$removedEntriesAll = @(
+    $planByTarget.Values |
+        ForEach-Object { @($_.RemovedParts) } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
 
 $shouldApplyPath = $false
 if ($changedAny) {
@@ -320,7 +349,7 @@ if ($shouldApplyPath) {
 
 Write-Host ""
 Write-Host "[TOOLCHAIN FOLDER REMOVAL]" -ForegroundColor Cyan
-$roots = Get-ToolchainRoots -BinDirs $gccBinDirs
+$roots = Get-ToolchainRoots -BinDirs $gccBinDirs -AdditionalPathEntries $removedEntriesAll
 
 if (@($roots).Count -eq 0) {
     Write-Host "  No candidate folders detected."
@@ -343,6 +372,7 @@ if (@($roots).Count -eq 0) {
             try {
                 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
                 Write-Host "  deleted      $root" -ForegroundColor Green
+                $deletedAny = $true
             } catch {
                 Write-Warning "  failed       $root ($($_.Exception.Message))"
             }
@@ -353,7 +383,7 @@ if (@($roots).Count -eq 0) {
 }
 
 Write-Host ""
-if ($changedAny) {
+if ($changedAny -or $deletedAny) {
     Write-Host "Done." -ForegroundColor Green
 } else {
     Write-Host "Nothing to remove." -ForegroundColor Yellow
