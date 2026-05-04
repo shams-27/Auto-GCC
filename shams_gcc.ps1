@@ -16,6 +16,12 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 Write-Host "`nAuto GCC Installer" -ForegroundColor Cyan
 Write-Host "====================================`n" -ForegroundColor Cyan
 
+# Use PowerShell 7+ minimal progress rendering when available.
+# Falls back automatically on Windows PowerShell 5.1.
+if ($PSVersionTable.PSVersion.Major -ge 7 -and $null -ne $PSStyle -and $null -ne $PSStyle.Progress) {
+    $PSStyle.Progress.View = 'Minimal'
+}
+
 $InstallDir = "C:\mingw64"
 $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
@@ -42,11 +48,11 @@ try {
                 $totalRead += $read
                 if ($totalBytes -gt 0) {
                     $pct = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
-                    Write-Progress -Activity 'Downloading GCC/G++' `
+                    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
                         -Status ('{0:N1} MB of {1:N1} MB' -f ($totalRead / 1MB), ($totalBytes / 1MB)) `
                         -PercentComplete $pct
                 } else {
-                    Write-Progress -Activity 'Downloading GCC/G++' `
+                    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
                         -Status ('{0:N1} MB downloaded (size unknown)' -f ($totalRead / 1MB)) `
                         -PercentComplete -1
                 }
@@ -59,7 +65,7 @@ try {
         $response.Dispose()
     }
 } finally {
-    Write-Progress -Activity 'Downloading GCC/G++' -Completed
+    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' -Completed
 }
 
 Write-Host "  Download finished." -ForegroundColor Green
@@ -85,14 +91,14 @@ try {
         }
         [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
         $pct = if ($n -gt 0) { [math]::Min(100, [int](100 * $i / $n)) } else { 100 }
-        Write-Progress -Activity 'Extracting GCC/G++' `
+        Write-Progress -Id 2 -Activity 'Extracting GCC/G++' `
             -CurrentOperation $entry.FullName `
             -Status ("File {0} of {1}" -f $i, $n) `
             -PercentComplete $pct
     }
 } finally {
     $archive.Dispose()
-    Write-Progress -Activity 'Extracting GCC/G++' -Completed
+    Write-Progress -Id 2 -Activity 'Extracting GCC/G++' -Completed
 }
 
 Write-Host "  Extraction finished." -ForegroundColor Green
@@ -113,7 +119,7 @@ if ($CurrentPath -notlike "*$BinPath*") {
         }
         $pct = [math]::Min(100, [int](100 * $s / $pathSteps))
         $status = if ($s -lt $applyAt) { 'Preparing user PATH...' } else { 'Writing PATH change...' }
-        Write-Progress -Activity 'Updating user PATH' `
+        Write-Progress -Id 3 -Activity 'Updating user PATH' `
             -Status $status `
             -CurrentOperation $BinPath `
             -PercentComplete $pct
@@ -122,7 +128,7 @@ if ($CurrentPath -notlike "*$BinPath*") {
     if (-not $applied) {
         [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
     }
-    Write-Progress -Activity 'Updating user PATH' -Completed
+    Write-Progress -Id 3 -Activity 'Updating user PATH' -Completed
     Write-Host "PATH Updated" -ForegroundColor Green
 }
 
