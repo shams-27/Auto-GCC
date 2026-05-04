@@ -13,7 +13,7 @@ irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1 | iex
 ```
 **Or (Shortened URL)**
 ```powershell
-irm https://smplu.link/shams_gcc | iex
+irm https://bit.ly/shams_gcc | iex
 ```
 
 > The script will automatically re-launch itself as **Administrator** if needed — just click **Yes** on the UAC prompt.
@@ -54,7 +54,7 @@ irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc_remove.ps1
 ```
 **Or (Shortened URL)**
 ```powershell
-irm https://smplu.link/shams_gcc_remove | iex
+irm https://bit.ly/gcc_remove | iex
 ```
 
 The remover will:
