@@ -14,8 +14,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-Write-Host "`nAuto GCC Installer" -ForegroundColor Cyan
-Write-Host "====================================`n" -ForegroundColor Cyan
+Write-Host "`nAuto Mingw-w64 Setup" -ForegroundColor Cyan
+Write-Host "====================`n" -ForegroundColor Cyan
 
 # Use PowerShell 7+ minimal progress rendering when available.
 # Falls back automatically on Windows PowerShell 5.1.
@@ -28,7 +28,7 @@ $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
 $ZipFile    = "$env:TEMP\winlibs.zip"
 
-Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
+Write-Host "Downloading Mingw-w64..." -ForegroundColor Cyan
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $request = [System.Net.HttpWebRequest]::Create($Url)
@@ -95,13 +95,13 @@ try {
         }
         [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
         $pct = if ($n -gt 0) { [math]::Min(100, [int](100 * $i / $n)) } else { 100 }
-        Write-Progress -Id 2 -Activity 'Extracting GCC/G++' `
+        Write-Progress -Id 2 -Activity 'Extracting Mingw-w64' `
             -Status ("{0}%" -f $pct) `
             -PercentComplete $pct
     }
 } finally {
     $archive.Dispose()
-    Write-Progress -Id 2 -Activity 'Extracting GCC/G++' -Completed
+    Write-Progress -Id 2 -Activity 'Extracting Mingw-w64' -Completed
 }
 
 Write-Host "  Extraction finished." -ForegroundColor Green
