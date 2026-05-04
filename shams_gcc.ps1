@@ -63,7 +63,6 @@ while ($job.State -eq 'Running') {
         (Get-ChildItem $InstallDir -Recurse -File -ErrorAction SilentlyContinue).Count
     } else { 0 }
  
-    if ($i -gt 0) { [Console]::Write("$([char]27)[1A") }
     Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $fileCount) -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
