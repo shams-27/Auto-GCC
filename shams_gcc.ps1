@@ -9,7 +9,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     $tempScript = "$env:TEMP\shams_gcc_temp.ps1"
     $scriptUrl  = "https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1"
     Invoke-RestMethod -Uri $scriptUrl -OutFile $tempScript
-    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`""
+    $shellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+    Start-Process $shellExe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`""
     exit
 }
 
@@ -43,17 +44,20 @@ try {
             $buffer = New-Object byte[] (1MB)
             $totalRead = 0
             $read = 0
+            $downloadStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
             while (($read = $readStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
                 $fileStream.Write($buffer, 0, $read)
                 $totalRead += $read
+                $elapsedSeconds = [math]::Max(0.001, $downloadStopwatch.Elapsed.TotalSeconds)
+                $speedMBps = ($totalRead / 1MB) / $elapsedSeconds
                 if ($totalBytes -gt 0) {
                     $pct = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
                     Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
-                        -Status ('{0:N1} MB of {1:N1} MB' -f ($totalRead / 1MB), ($totalBytes / 1MB)) `
+                        -Status ("{0}% | {1:N1} MB/s" -f $pct, $speedMBps) `
                         -PercentComplete $pct
                 } else {
                     Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
-                        -Status ('{0:N1} MB downloaded (size unknown)' -f ($totalRead / 1MB)) `
+                        -Status ('{0:N1} MB | {1:N1} MB/s' -f ($totalRead / 1MB), $speedMBps) `
                         -PercentComplete -1
                 }
             }
@@ -92,8 +96,7 @@ try {
         [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
         $pct = if ($n -gt 0) { [math]::Min(100, [int](100 * $i / $n)) } else { 100 }
         Write-Progress -Id 2 -Activity 'Extracting GCC/G++' `
-            -CurrentOperation $entry.FullName `
-            -Status ("File {0} of {1}" -f $i, $n) `
+            -Status ("{0}%" -f $pct) `
             -PercentComplete $pct
     }
 } finally {
@@ -118,10 +121,8 @@ if ($CurrentPath -notlike "*$BinPath*") {
             $applied = $true
         }
         $pct = [math]::Min(100, [int](100 * $s / $pathSteps))
-        $status = if ($s -lt $applyAt) { 'Preparing user PATH...' } else { 'Writing PATH change...' }
         Write-Progress -Id 3 -Activity 'Updating user PATH' `
-            -Status $status `
-            -CurrentOperation $BinPath `
+            -Status ("{0}%" -f $pct) `
             -PercentComplete $pct
         Start-Sleep -Milliseconds 38
     }
