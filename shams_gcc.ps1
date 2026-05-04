@@ -15,7 +15,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 Write-Host "`nAuto Mingw-w64 Solution" -ForegroundColor Cyan
-Write-Host "====================`n" -ForegroundColor Cyan
+Write-Host "=======================`n" -ForegroundColor Cyan
 
 # Use PowerShell 7+ minimal progress rendering when available.
 # Falls back automatically on Windows PowerShell 5.1.
@@ -138,4 +138,12 @@ Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version`n"
-Write-Host "`nMade by Shams`n" -ForegroundColor Cyan
+
+$shamsColors = @('Red', 'Yellow', 'Green', 'Cyan', 'Magenta')
+$shamsLetters = 'Shams'.ToCharArray()
+
+Write-Host "`nMade by " -ForegroundColor Cyan -NoNewline
+for ($i = 0; $i -lt $shamsLetters.Length; $i++) {
+    $isLast = ($i -eq $shamsLetters.Length - 1)
+    Write-Host $shamsLetters[$i] -ForegroundColor $shamsColors[$i] -NoNewline:(-not $isLast)
+}
