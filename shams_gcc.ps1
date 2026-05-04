@@ -23,35 +23,79 @@ $ZipFile    = "$env:TEMP\winlibs.zip"
 
 Write-Host "Downloading GCC/G++..." -ForegroundColor Cyan
 
-# Run download in a background job so we can show a spinner
-$job = Start-Job -ScriptBlock {
-    param($u, $z)
-    $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
-} -ArgumentList $Url, $ZipFile
-
-# Spinner loop on the main thread
-$spinner = @('|', '/', '-', '\')
-$i = 0
-while ($job.State -eq 'Running') {
-    $sizeMB = if (Test-Path $ZipFile) {
-        "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
-    } else { "0.0 MB" }
-
-    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
-    $i++
-    Start-Sleep -Milliseconds 200
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$request = [System.Net.HttpWebRequest]::Create($Url)
+$request.UserAgent = 'shams_gcc-installer/1.0'
+$request.AllowAutoRedirect = $true
+try {
+    $response = $request.GetResponse()
+    try {
+        $totalBytes = [int64]$response.ContentLength
+        $readStream = $response.GetResponseStream()
+        $fileStream = [System.IO.File]::Create($ZipFile)
+        try {
+            $buffer = New-Object byte[] (1MB)
+            $totalRead = 0
+            $read = 0
+            while (($read = $readStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $fileStream.Write($buffer, 0, $read)
+                $totalRead += $read
+                if ($totalBytes -gt 0) {
+                    $pct = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
+                    Write-Progress -Activity 'Downloading GCC/G++' `
+                        -Status ('{0:N1} MB of {1:N1} MB' -f ($totalRead / 1MB), ($totalBytes / 1MB)) `
+                        -PercentComplete $pct
+                } else {
+                    Write-Progress -Activity 'Downloading GCC/G++' `
+                        -Status ('{0:N1} MB downloaded (size unknown)' -f ($totalRead / 1MB)) `
+                        -PercentComplete -1
+                }
+            }
+        } finally {
+            $fileStream.Dispose()
+            $readStream.Dispose()
+        }
+    } finally {
+        $response.Dispose()
+    }
+} finally {
+    Write-Progress -Activity 'Downloading GCC/G++' -Completed
 }
 
-Receive-Job $job -ErrorAction Stop | Out-Null
-Remove-Job $job
-
-Write-Host "`r  Done!                              " -ForegroundColor Green
+Write-Host "  Download finished." -ForegroundColor Green
 
 Write-Host "`nExtracting..." -ForegroundColor Cyan
-Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($ZipFile)
+try {
+    $fileEntries = @($archive.Entries | Where-Object { -not $_.FullName.EndsWith('/') })
+    $n = $fileEntries.Count
+    $i = 0
+    foreach ($entry in $fileEntries) {
+        $i++
+        $relative = $entry.FullName.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+        $targetPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($InstallDir, $relative))
+        $installRoot = [System.IO.Path]::GetFullPath($InstallDir)
+        if (-not $targetPath.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to extract outside install dir: $targetPath"
+        }
+        $destDir = [System.IO.Path]::GetDirectoryName($targetPath)
+        if ($destDir -and -not (Test-Path -LiteralPath $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+        $pct = if ($n -gt 0) { [math]::Min(100, [int](100 * $i / $n)) } else { 100 }
+        Write-Progress -Activity 'Extracting GCC/G++' `
+            -CurrentOperation $entry.FullName `
+            -Status ("File {0} of {1}" -f $i, $n) `
+            -PercentComplete $pct
+    }
+} finally {
+    $archive.Dispose()
+    Write-Progress -Activity 'Extracting GCC/G++' -Completed
+}
 
-Write-Host "`r  Done!                              " -ForegroundColor Green
+Write-Host "  Extraction finished." -ForegroundColor Green
 
 if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
 
