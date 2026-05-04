@@ -329,9 +329,21 @@ if ($changedAny) {
 }
 
 if ($shouldApplyPath) {
+    $pathTargetsToUpdate = @(
+        $targets | Where-Object { @($planByTarget[$_].RemovedParts).Count -gt 0 }
+    )
+    $pathTotal = @($pathTargetsToUpdate).Count
+    $pathIndex = 0
+
     foreach ($target in $targets) {
         $result = $planByTarget[$target]
         if (@($result.RemovedParts).Count -eq 0) { continue }
+        $pathIndex++
+        $pathPercent = if ($pathTotal -gt 0) { [int](100 * $pathIndex / $pathTotal) } else { 100 }
+        Write-Progress -Activity "Removing GCC PATH entries" `
+            -Status ("Updating {0} PATH ({1}/{2})" -f $target, $pathIndex, $pathTotal) `
+            -CurrentOperation ("Removing {0} entries" -f @($result.RemovedParts).Count) `
+            -PercentComplete $pathPercent
         try {
             Set-PathByScope -TargetScope $target -Value $result.NewValue
             Write-Host "[$target PATH] updated." -ForegroundColor Green
@@ -339,6 +351,7 @@ if ($shouldApplyPath) {
             Write-Warning "[$target PATH] failed to update ($($_.Exception.Message))"
         }
     }
+    Write-Progress -Activity "Removing GCC PATH entries" -Completed
     Send-EnvironmentChanged
     Write-Host ""
     Write-Host "Environment change broadcast sent." -ForegroundColor Green
@@ -364,7 +377,15 @@ if (@($roots).Count -eq 0) {
     }
 
     if ($shouldDelete) {
+        $deleteTotal = @($roots).Count
+        $deleteIndex = 0
         foreach ($root in $roots) {
+            $deleteIndex++
+            $deletePercent = if ($deleteTotal -gt 0) { [int](100 * $deleteIndex / $deleteTotal) } else { 100 }
+            Write-Progress -Activity "Deleting GCC toolchain folders" `
+                -Status ("Processing folder {0}/{1}" -f $deleteIndex, $deleteTotal) `
+                -CurrentOperation $root `
+                -PercentComplete $deletePercent
             if (-not (Test-Path -LiteralPath $root)) {
                 Write-Host "  not found    $root"
                 continue
@@ -377,6 +398,7 @@ if (@($roots).Count -eq 0) {
                 Write-Warning "  failed       $root ($($_.Exception.Message))"
             }
         }
+        Write-Progress -Activity "Deleting GCC toolchain folders" -Completed
     } else {
         Write-Host "  Folder deletion skipped by user." -ForegroundColor Yellow
     }
