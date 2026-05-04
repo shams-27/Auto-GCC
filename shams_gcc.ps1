@@ -32,7 +32,7 @@ function Start-Spinner {
     $spinner = @('|', '/', '-', '\')
     $i = 0
     while ($job.State -eq 'Running') {
-        Write-Host ("`r  {0}  {1}..." -f $spinner[$i % 4], $Label) -NoNewline -ForegroundColor Yellow
+        Write-Host ("`r  {0}  {1}..." -f $spinner[$i % 4], $Label) -ForegroundColor Yellow
         $i++
         Start-Sleep -Milliseconds 200
     }
@@ -60,7 +60,7 @@ while ($job.State -eq 'Running') {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
+    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
@@ -86,7 +86,7 @@ while ($job.State -eq 'Running') {
         (Get-ChildItem $InstallDir -Recurse -File -ErrorAction SilentlyContinue).Count
     } else { 0 }
 
-    Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $fileCount) -NoNewline -ForegroundColor Yellow
+    Write-Host ("`r  {0}  {1} files extracted..." -f $spinner[$i % 4], $fileCount) -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
