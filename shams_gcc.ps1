@@ -2,6 +2,15 @@
 # shams_gcc.ps1 - Simple GCC Installer
 # ================================================
 
+# Auto-elevate to Administrator if not already running as one
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Restarting as Administrator..." -ForegroundColor Yellow
+    $scriptUrl = "https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1"
+    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm '$scriptUrl' | iex`""
+    exit
+}
+
 Write-Host "Auto GCC Installer" -ForegroundColor Cyan
 Write-Host "====================================`n" -ForegroundColor Cyan
 
