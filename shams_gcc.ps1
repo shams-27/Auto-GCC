@@ -29,55 +29,29 @@ $job = Start-Job -ScriptBlock {
     Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing
 } -ArgumentList $Url, $ZipFile
 
-# Hide cursor via Win32 API (works in all PS versions and execution modes)
-$code = @"
-using System;
-using System.Runtime.InteropServices;
-public class ConsoleCursor {
-    [DllImport("kernel32.dll")]
-    static extern IntPtr GetStdHandle(int h);
-    [DllImport("kernel32.dll")]
-    static extern bool GetConsoleCursorInfo(IntPtr h, out CONSOLE_CURSOR_INFO i);
-    [DllImport("kernel32.dll")]
-    static extern bool SetConsoleCursorInfo(IntPtr h, ref CONSOLE_CURSOR_INFO i);
-    public struct CONSOLE_CURSOR_INFO { public int Size; public bool Visible; }
-    public static void Hide() {
-        var h = GetStdHandle(-11);
-        CONSOLE_CURSOR_INFO i;
-        GetConsoleCursorInfo(h, out i);
-        i.Visible = false;
-        SetConsoleCursorInfo(h, ref i);
-    }
-    public static void Show() {
-        var h = GetStdHandle(-11);
-        CONSOLE_CURSOR_INFO i;
-        GetConsoleCursorInfo(h, out i);
-        i.Visible = true;
-        SetConsoleCursorInfo(h, ref i);
-    }
-}
-"@
-Add-Type -TypeDefinition $code
-[ConsoleCursor]::Hide()
-
 $spinner = @('|', '/', '-', '\')
 $i = 0
+# Get console width, default 120 if unavailable
+$width = try { [Console]::WindowWidth } catch { 120 }
+
 while ($job.State -eq 'Running') {
     $sizeMB = if (Test-Path $ZipFile) {
         "{0:0.0} MB" -f ((Get-Item $ZipFile).Length / 1MB)
     } else { "0.0 MB" }
 
-    Write-Host ("`r  {0}  {1} downloaded..." -f $spinner[$i % 4], $sizeMB) -NoNewline -ForegroundColor Yellow
+    $text = "  $($spinner[$i % 4])  $sizeMB downloaded..."
+    # Pad to full console width - 1 so cursor wraps off the visible line
+    $padded = $text.PadRight($width - 1)
+    Write-Host "`r$padded" -NoNewline -ForegroundColor Yellow
     $i++
     Start-Sleep -Milliseconds 200
 }
 
-[ConsoleCursor]::Show()
-
 Receive-Job $job -ErrorAction Stop | Out-Null
 Remove-Job $job
 
-Write-Host "`r  Done!                              " -ForegroundColor Green
+$done = "  Done!".PadRight($width - 1)
+Write-Host "`r$done" -ForegroundColor Green
 
 Write-Host "Extracting..." -ForegroundColor Cyan
 Expand-Archive -Path $ZipFile -DestinationPath $InstallDir -Force
