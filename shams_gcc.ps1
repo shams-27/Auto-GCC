@@ -56,7 +56,7 @@ try {
                         -Status ("{0}% | {1:N1} MB/s" -f $pct, $speedMBps) `
                         -PercentComplete $pct
                 } else {
-                    Write-Progress -Id 1 -Activity 'Downloading GCC/G++' `
+                    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' `
                         -Status ('{0:N1} MB | {1:N1} MB/s' -f ($totalRead / 1MB), $speedMBps) `
                         -PercentComplete -1
                 }
