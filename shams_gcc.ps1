@@ -15,9 +15,18 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 Write-Host ""
-Write-Host "  ╔═════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║     Auto Mingw-w64 Solution     ║" -ForegroundColor Cyan
-Write-Host "  ╚═════════════════════════════════╝" -ForegroundColor Cyan
+$asciiArt = @"
+ _______          _________ _______    _______  _______  _______ 
+(   ___ )|\     /|\__   __/(  ___  )  (  ____ \(  ____ \(  ____ \
+| (   ) || )   ( |   ) (   | (   ) |  | (    \/| (    \/| (    \/
+| (___) || |   | |   | |   | |   | |  | |      | |      | |      
+|  ___  || |   | |   | |   | |   | |  | | ____ | |      | |      
+| (   ) || |   | |   | |   | |   | |  | | \_  )| |      | |      
+| )   ( || (___) |   | |   | (___) |  | (___) || (____/\| (____/\
+|/     \|(_______)   )_(   (_______)  (_______)(_______/(_______/
+"@
+
+Write-Host $asciiArt -ForegroundColor Cyan
 Write-Host ""
 
 # Use PowerShell 7+ minimal progress rendering when available.
