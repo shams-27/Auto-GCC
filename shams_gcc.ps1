@@ -78,9 +78,9 @@ $lines = @(
 $split = 38
 
 foreach ($line in $lines) {
-    [Console]::ForegroundColor = [ConsoleColor]::Yellow
+    [Console]::ForegroundColor = [ConsoleColor]::Blue
     [Console]::Write($line.Substring(0, $split))
-    [Console]::ForegroundColor = [ConsoleColor]::Cyan
+    [Console]::ForegroundColor = [ConsoleColor]::DarkYellow
     [Console]::WriteLine($line.Substring($split))
 }
 
