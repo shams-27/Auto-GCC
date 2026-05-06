@@ -18,9 +18,88 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$ProgressPreference    = 'SilentlyContinue'
 
+# ------------------------------------------------
+# Progress bar helpers (Windows-safe, no ANSI)
+# ------------------------------------------------
+$script:_pbRow = -1
+
+function Show-ProgressBar {
+    param(
+        [string]$Status,
+        [int]   $Percent
+    )
+
+    $winWidth = $Host.UI.RawUI.WindowSize.Width
+    $barInner = [Math]::Max(10, $winWidth - 3)
+
+    $filled = if ($Percent -lt 0) {
+        $barInner
+    } else {
+        [Math]::Min($barInner, [int](($barInner * $Percent) / 100))
+    }
+    $empty = $barInner - $filled
+
+    if ($script:_pbRow -lt 0) {
+        [Console]::WriteLine("")
+        [Console]::WriteLine("")
+        $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y - 2
+    }
+
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    $padded = $Status.PadRight($winWidth - 1).Substring(0, $winWidth - 1)
+    [Console]::ForegroundColor = [ConsoleColor]::Cyan
+    [Console]::Write($padded)
+
+    [Console]::SetCursorPosition(0, $script:_pbRow + 1)
+    [Console]::Write('[' + ('0' * $filled) + (' ' * $empty) + ']')
+    [Console]::ResetColor()
+}
+
+function Clear-ProgressBar {
+    if ($script:_pbRow -lt 0) { return }
+    $winWidth = $Host.UI.RawUI.WindowSize.Width
+    $blank    = ' ' * ($winWidth - 1)
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    [Console]::WriteLine($blank)
+    [Console]::WriteLine($blank)
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    $script:_pbRow = -1
+}
+
+# ------------------------------------------------
+# ASCII Art
+# ------------------------------------------------
+Write-Host ""
+$lines = @(
+    ' _______  _______  _______    _______  _______  _______  _______           _______  _______ ',
+    '(  ____ \(  ____ \(  ____ \  (  ____ )(  ____ \(       )(  ___  )|\     /|(  ____ \(  ____ )',
+    '| (    \/| (    \/| (    \/  | (    )|| (    \/| () () || (   ) || )   ( || (    \/| (    )|',
+    '| |      | |      | |        | (____)|| (__    | || || || |   | || |   | || (__    | (____)|',
+    '| | ____ | |      | |        |     __)|  __)   | |(_)| || |   | |( (   ) )|  __)   |     __)',
+    '| | \_  )| |      | |        | (\ (   | (      | |   | || |   | | \ \_/ / | (      | (\ (   ',
+    '| (___) || (____/\| (____/\  | ) \ \__| (____/\| )   ( || (___) |  \   /  | (____/\| ) \ \__',
+    '(_______)(_______/(_______/  |/   \__/(_______/|/     \|(_______)   \_/   (_______/|/   \__/'
+)
+
+$split = 28
+
+foreach ($line in $lines) {
+    [Console]::ForegroundColor = [ConsoleColor]::Blue
+    [Console]::Write($line.Substring(0, $split))
+    [Console]::ForegroundColor = [ConsoleColor]::DarkRed
+    [Console]::WriteLine($line.Substring($split))
+}
+
+[Console]::ResetColor()
+Write-Host ""
+
+# ------------------------------------------------
+# Helper functions
+# ------------------------------------------------
 function Test-IsAdmin {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
@@ -74,32 +153,19 @@ function Test-LooksLikeGccPath {
     if ([string]::IsNullOrWhiteSpace($n)) { return $false }
 
     foreach ($d in $KnownBinDirs) {
-        if ($n -eq (Normalize-PathText $d)) {
-            return $true
-        }
+        if ($n -eq (Normalize-PathText $d)) { return $true }
     }
 
     $patterns = @(
-        "\\msys64\\",
-        "\\mingw64\\",
-        "\\mingw32\\",
-        "\\ucrt64\\",
-        "\\clang64\\",
-        "\\winlibs\\",
-        "\\tdm-gcc\\",
-        "\\mingw\\",
-        "\\gcc\\"
+        "\\msys64\\", "\\mingw64\\", "\\mingw32\\", "\\ucrt64\\",
+        "\\clang64\\", "\\winlibs\\", "\\tdm-gcc\\", "\\mingw\\", "\\gcc\\"
     )
 
     foreach ($p in $patterns) {
-        if ($n -match [Regex]::Escape($p)) {
-            return $true
-        }
+        if ($n -match [Regex]::Escape($p)) { return $true }
     }
 
-    if ($n.EndsWith("\bin") -and ($n -match "mingw|winlibs|gcc|msys")) {
-        return $true
-    }
+    if ($n.EndsWith("\bin") -and ($n -match "mingw|winlibs|gcc|msys")) { return $true }
 
     return $false
 }
@@ -117,12 +183,12 @@ function Remove-MatchingPathEntries {
         [string[]]$ForceMatch
     )
 
-    $parts = Split-PathVariable $PathValue
+    $parts     = Split-PathVariable $PathValue
     $forceList = @()
     if ($null -ne $ForceMatch) {
         $forceList = @($ForceMatch | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     }
-    $keep = New-Object System.Collections.Generic.List[string]
+    $keep    = New-Object System.Collections.Generic.List[string]
     $removed = New-Object System.Collections.Generic.List[string]
 
     foreach ($part in $parts) {
@@ -156,21 +222,19 @@ function Get-ToolchainRoots {
         [string[]]$AdditionalPathEntries
     )
 
-    $roots = New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)
+    $roots   = New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)
     $sources = @()
-    if ($null -ne $BinDirs) { $sources += @($BinDirs) }
-    if ($null -ne $AdditionalPathEntries) { $sources += @($AdditionalPathEntries) }
+    if ($null -ne $BinDirs)                { $sources += @($BinDirs) }
+    if ($null -ne $AdditionalPathEntries)  { $sources += @($AdditionalPathEntries) }
 
     foreach ($dir in $sources) {
         $n = Normalize-PathText $dir
         if ([string]::IsNullOrWhiteSpace($n)) { continue }
 
-        $parts = $n -split "\\"
+        $parts   = $n -split "\\"
         $markers = @("msys64", "winlibs", "tdm-gcc", "mingw64", "mingw32", "ucrt64", "clang64")
 
         foreach ($m in $markers) {
-            # Use the deepest match so paths like C:\mingw64\mingw64\bin
-            # resolve to C:\mingw64 (not C:).
             $idx = [Array]::LastIndexOf($parts, $m)
             if ($idx -ge 0) {
                 [void]$roots.Add(($parts[0..$idx] -join "\"))
@@ -183,14 +247,9 @@ function Get-ToolchainRoots {
         }
     }
 
-    # Fallback roots for common GCC distributions if PATH has already been cleaned.
     $fallbackRoots = @(
-        "C:\msys64",
-        "C:\mingw64",
-        "C:\mingw32",
-        "C:\mingw",
-        "C:\winlibs",
-        "C:\tdm-gcc",
+        "C:\msys64", "C:\mingw64", "C:\mingw32", "C:\mingw",
+        "C:\winlibs", "C:\tdm-gcc",
         "$env:ProgramFiles\winlibs",
         "$env:ProgramFiles\mingw-w64",
         "$env:ProgramFiles(x86)\mingw-w64"
@@ -224,23 +283,16 @@ public static class EnvBroadcast {
         int fuFlags, int uTimeout, out IntPtr lpdwResult);
 }
 "@
-
     if (-not ("EnvBroadcast" -as [type])) {
         Add-Type -TypeDefinition $signature | Out-Null
     }
-
-    $HWND_BROADCAST = [IntPtr]0xffff
+    $HWND_BROADCAST  = [IntPtr]0xffff
     $WM_SETTINGCHANGE = 0x1A
     $SMTO_ABORTIFHUNG = 0x2
     $result = [IntPtr]::Zero
     [void][EnvBroadcast]::SendMessageTimeout(
-        $HWND_BROADCAST,
-        $WM_SETTINGCHANGE,
-        [IntPtr]::Zero,
-        "Environment",
-        $SMTO_ABORTIFHUNG,
-        5000,
-        [ref]$result
+        $HWND_BROADCAST, $WM_SETTINGCHANGE, [IntPtr]::Zero,
+        "Environment", $SMTO_ABORTIFHUNG, 5000, [ref]$result
     )
 }
 
@@ -249,23 +301,27 @@ function Confirm-YesNo {
         [string]$PromptText,
         [switch]$DefaultNo
     )
-
     while ($true) {
         $suffix = if ($DefaultNo) { "[y/N]" } else { "[Y/n]" }
-        $reply = Read-Host "$PromptText $suffix"
-        if ([string]::IsNullOrWhiteSpace($reply)) {
-            return (-not $DefaultNo)
-        }
+        $reply  = Read-Host "$PromptText $suffix"
+        if ([string]::IsNullOrWhiteSpace($reply)) { return (-not $DefaultNo) }
         switch ($reply.Trim().ToLowerInvariant()) {
-            "y" { return $true }
+            "y"   { return $true }
             "yes" { return $true }
-            "n" { return $false }
-            "no" { return $false }
-            default { Write-Host "Please type y or n." -ForegroundColor Yellow }
+            "n"   { return $false }
+            "no"  { return $false }
+            default {
+                [Console]::ForegroundColor = [ConsoleColor]::Yellow
+                [Console]::WriteLine("Please type y or n.")
+                [Console]::ResetColor()
+            }
         }
     }
 }
 
+# ------------------------------------------------
+# Main
+# ------------------------------------------------
 if (($Scope -eq "Machine" -or $Scope -eq "All") -and -not (Test-IsAdmin)) {
     Write-Warning "Machine PATH edits require Administrator PowerShell."
     if ($Scope -eq "Machine") {
@@ -276,39 +332,45 @@ if (($Scope -eq "Machine" -or $Scope -eq "All") -and -not (Test-IsAdmin)) {
 
 $gccBinDirs = @(Get-GccBinDirs)
 Write-Host ""
-Write-Host "Detected gcc/g++ bin directories:" -ForegroundColor Cyan
+[Console]::ForegroundColor = [ConsoleColor]::Cyan
+[Console]::WriteLine("Detected gcc/g++ bin directories:")
+[Console]::ResetColor()
 if (@($gccBinDirs).Count -eq 0) {
-    Write-Host "  (none found from current PATH)" -ForegroundColor Yellow
+    [Console]::ForegroundColor = [ConsoleColor]::Yellow
+    [Console]::WriteLine("  (none found from current PATH)")
+    [Console]::ResetColor()
 } else {
-    $gccBinDirs | ForEach-Object { Write-Host "  - $_" }
+    $gccBinDirs | ForEach-Object { [Console]::WriteLine("  - $_") }
 }
 
-$targets = @()
-if ($Scope -in @("User", "All")) { $targets += "User" }
+$targets      = @()
+if ($Scope -in @("User",    "All")) { $targets += "User" }
 if ($Scope -in @("Machine", "All")) { $targets += "Machine" }
 
-$changedAny = $false
-$deletedAny = $false
+$changedAny   = $false
+$deletedAny   = $false
 $planByTarget = @{}
 
 foreach ($target in $targets) {
     $current = [Environment]::GetEnvironmentVariable("Path", $target)
-    $result = Remove-MatchingPathEntries -PathValue $current -KnownBinDirs $gccBinDirs -ForceMatch $ExtraPath
+    $result  = Remove-MatchingPathEntries -PathValue $current -KnownBinDirs $gccBinDirs -ForceMatch $ExtraPath
     $planByTarget[$target] = $result
 
     Write-Host ""
-    Write-Host "[$target PATH]" -ForegroundColor Cyan
-    Write-Host ("  Entries total     : {0}" -f @($result.OriginalParts).Count)
-    Write-Host ("  Entries to remove : {0}" -f @($result.RemovedParts).Count)
-    foreach ($r in $result.RemovedParts) {
-        Write-Host "    - $r"
-    }
+    [Console]::ForegroundColor = [ConsoleColor]::Cyan
+    [Console]::WriteLine("[$target PATH]")
+    [Console]::ResetColor()
+    [Console]::WriteLine("  Entries total     : {0}" -f @($result.OriginalParts).Count)
+    [Console]::WriteLine("  Entries to remove : {0}" -f @($result.RemovedParts).Count)
+    foreach ($r in $result.RemovedParts) { [Console]::WriteLine("    - $r") }
 
     if (@($result.RemovedParts).Count -gt 0) {
         $changedAny = $true
-        Write-Host "  Action: ready to update (pending confirmation)" -ForegroundColor Yellow
+        [Console]::ForegroundColor = [ConsoleColor]::Yellow
+        [Console]::WriteLine("  Action: ready to update (pending confirmation)")
+        [Console]::ResetColor()
     } else {
-        Write-Host "  Action: no changes needed"
+        [Console]::WriteLine("  Action: no changes needed")
     }
 }
 
@@ -329,46 +391,49 @@ if ($changedAny) {
 }
 
 if ($shouldApplyPath) {
-    $pathTargetsToUpdate = @(
-        $targets | Where-Object { @($planByTarget[$_].RemovedParts).Count -gt 0 }
-    )
+    $pathTargetsToUpdate = @($targets | Where-Object { @($planByTarget[$_].RemovedParts).Count -gt 0 })
     $pathTotal = @($pathTargetsToUpdate).Count
     $pathIndex = 0
 
+    Write-Host ""
     foreach ($target in $targets) {
         $result = $planByTarget[$target]
         if (@($result.RemovedParts).Count -eq 0) { continue }
         $pathIndex++
-        $pathPercent = if ($pathTotal -gt 0) { [int](100 * $pathIndex / $pathTotal) } else { 100 }
-        Write-Progress -Activity "Removing GCC PATH entries" `
-            -Status ("Updating {0} PATH ({1}/{2})" -f $target, $pathIndex, $pathTotal) `
-            -CurrentOperation ("Removing {0} entries" -f @($result.RemovedParts).Count) `
-            -PercentComplete $pathPercent
+        $pct = if ($pathTotal -gt 0) { [int](100 * $pathIndex / $pathTotal) } else { 100 }
+        Show-ProgressBar -Status ("Updating {0} PATH ({1}/{2})" -f $target, $pathIndex, $pathTotal) -Percent $pct
         try {
             Set-PathByScope -TargetScope $target -Value $result.NewValue
-            Write-Host "[$target PATH] updated." -ForegroundColor Green
         } catch {
+            Clear-ProgressBar
             Write-Warning "[$target PATH] failed to update ($($_.Exception.Message))"
         }
     }
-    Write-Progress -Activity "Removing GCC PATH entries" -Completed
+    Clear-ProgressBar
+
     Send-EnvironmentChanged
-    Write-Host ""
-    Write-Host "Environment change broadcast sent." -ForegroundColor Green
+    [Console]::ForegroundColor = [ConsoleColor]::Green
+    [Console]::WriteLine("PATH updated successfully.")
+    [Console]::WriteLine("Environment change broadcast sent.")
+    [Console]::ResetColor()
 } elseif ($changedAny) {
     Write-Host ""
-    Write-Host "PATH removal skipped by user." -ForegroundColor Yellow
+    [Console]::ForegroundColor = [ConsoleColor]::Yellow
+    [Console]::WriteLine("PATH removal skipped by user.")
+    [Console]::ResetColor()
 }
 
 Write-Host ""
-Write-Host "[TOOLCHAIN FOLDER REMOVAL]" -ForegroundColor Cyan
+[Console]::ForegroundColor = [ConsoleColor]::Cyan
+[Console]::WriteLine("[TOOLCHAIN FOLDER REMOVAL]")
+[Console]::ResetColor()
 $roots = Get-ToolchainRoots -BinDirs $gccBinDirs -AdditionalPathEntries $removedEntriesAll
 
 if (@($roots).Count -eq 0) {
-    Write-Host "  No candidate folders detected."
+    [Console]::WriteLine("  No candidate folders detected.")
 } else {
-    Write-Host "  Candidate folders:"
-    $roots | ForEach-Object { Write-Host "    - $_" }
+    [Console]::WriteLine("  Candidate folders:")
+    $roots | ForEach-Object { [Console]::WriteLine("    - $_") }
 
     $shouldDelete = $Force
     if (-not $Force) {
@@ -379,34 +444,42 @@ if (@($roots).Count -eq 0) {
     if ($shouldDelete) {
         $deleteTotal = @($roots).Count
         $deleteIndex = 0
+        Write-Host ""
         foreach ($root in $roots) {
             $deleteIndex++
-            $deletePercent = if ($deleteTotal -gt 0) { [int](100 * $deleteIndex / $deleteTotal) } else { 100 }
-            Write-Progress -Activity "Deleting GCC toolchain folders" `
-                -Status ("Processing folder {0}/{1}" -f $deleteIndex, $deleteTotal) `
-                -CurrentOperation $root `
-                -PercentComplete $deletePercent
+            $pct = if ($deleteTotal -gt 0) { [int](100 * $deleteIndex / $deleteTotal) } else { 100 }
+            Show-ProgressBar -Status ("Deleting folder {0}/{1}: {2}" -f $deleteIndex, $deleteTotal, $root) -Percent $pct
             if (-not (Test-Path -LiteralPath $root)) {
-                Write-Host "  not found    $root"
+                Clear-ProgressBar
+                [Console]::WriteLine("  not found    $root")
                 continue
             }
             try {
                 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop
-                Write-Host "  deleted      $root" -ForegroundColor Green
+                Clear-ProgressBar
+                [Console]::ForegroundColor = [ConsoleColor]::Green
+                [Console]::WriteLine("  deleted      $root")
+                [Console]::ResetColor()
                 $deletedAny = $true
             } catch {
+                Clear-ProgressBar
                 Write-Warning "  failed       $root ($($_.Exception.Message))"
             }
         }
-        Write-Progress -Activity "Deleting GCC toolchain folders" -Completed
+        if ($script:_pbRow -ge 0) { Clear-ProgressBar }
     } else {
-        Write-Host "  Folder deletion skipped by user." -ForegroundColor Yellow
+        [Console]::ForegroundColor = [ConsoleColor]::Yellow
+        [Console]::WriteLine("  Folder deletion skipped by user.")
+        [Console]::ResetColor()
     }
 }
 
 Write-Host ""
 if ($changedAny -or $deletedAny) {
-    Write-Host "Done." -ForegroundColor Green
+    [Console]::ForegroundColor = [ConsoleColor]::Green
+    [Console]::WriteLine("Done.")
 } else {
-    Write-Host "Nothing to remove." -ForegroundColor Yellow
+    [Console]::ForegroundColor = [ConsoleColor]::Yellow
+    [Console]::WriteLine("Nothing to remove.")
 }
+[Console]::ResetColor()
