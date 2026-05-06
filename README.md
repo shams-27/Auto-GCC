@@ -2,6 +2,12 @@
 
 Instantly installs **GCC / G++ (MinGW-w64)** on Windows with a single PowerShell command. No manual downloading, no PATH headaches.
 
+
+
+https://github.com/user-attachments/assets/f6b3a43b-9810-4d22-9468-5582f029f7c2
+
+
+
 ---
 
 ## 🚀 Quick Install
