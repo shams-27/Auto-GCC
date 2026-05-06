@@ -7,7 +7,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $shellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
     Start-Process $shellExe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    exit
+    return
 }
 
 # ------------------------------------------------
@@ -96,7 +96,7 @@ if ($existingGcc) {
     Write-Host "GCC is already available on this system." -ForegroundColor Green
     Write-Host "Found directory: $gccDir" -ForegroundColor Cyan
     Write-Host "Skipping installation process.`n" -ForegroundColor Yellow
-    exit
+    return
 }
 # ================================================
 
