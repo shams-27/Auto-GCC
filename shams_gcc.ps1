@@ -14,26 +14,82 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     exit
 }
 
-Write-Host ""
-$asciiArt = @"
- _______          _________ _______    _______  _______  _______ 
-(  ___  )|\     /|\__   __/(  ___  )  (  ____ \(  ____ \(  ____ \
-| (   ) || )   ( |   ) (   | (   ) |  | (    \/| (    \/| (    \/
-| (___) || |   | |   | |   | |   | |  | |      | |      | |      
-|  ___  || |   | |   | |   | |   | |  | | ____ | |      | |      
-| (   ) || |   | |   | |   | |   | |  | | \_  )| |      | |      
-| )   ( || (___) |   | |   | (___) |  | (___) || (____/\| (____/\
-|/     \|(_______)   )_(   (_______)  (_______)(_______/(_______/
-"@
+# ------------------------------------------------
+# Progress bar helpers  
+# ------------------------------------------------
+$script:_pbRow = -1   # console row where the two-line bar lives
 
-Write-Host $asciiArt -ForegroundColor Cyan
-Write-Host ""
+function Show-ProgressBar {
+    param(
+        [string]$Status,
+        [int]   $Percent   
+    )
 
-# Use PowerShell 7+ minimal progress rendering when available.
-# Falls back automatically on Windows PowerShell 5.1.
-if ($PSVersionTable.PSVersion.Major -ge 7 -and $null -ne $PSStyle -and $null -ne $PSStyle.Progress) {
-    $PSStyle.Progress.View = 'Minimal'
+    $winWidth = $Host.UI.RawUI.WindowSize.Width
+    $barInner = [Math]::Max(10, $winWidth - 3)   
+
+    $filled = if ($Percent -lt 0) {
+        $barInner
+    } else {
+        [Math]::Min($barInner, [int](($barInner * $Percent) / 100))
+    }
+    $empty = $barInner - $filled
+
+    # Reserve two lines on first call
+    if ($script:_pbRow -lt 0) {
+        $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y
+        Write-Host ""   
+        Write-Host ""   
+    }
+
+    # --- line 1: status text ---
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    $padded = $Status.PadRight($winWidth - 1).Substring(0, $winWidth - 1)
+    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::Cyan
+    [Console]::Write($padded)
+
+    # --- line 2: [ ooo...   ] ---
+    [Console]::SetCursorPosition(0, $script:_pbRow + 1)
+    [Console]::Write('[' + ('o' * $filled) + (' ' * $empty) + ']')
+    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White   # restore default
 }
+
+function Clear-ProgressBar {
+    if ($script:_pbRow -lt 0) { return }
+    $winWidth = $Host.UI.RawUI.WindowSize.Width
+    $blank    = ' ' * ($winWidth - 1)
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    [Console]::WriteLine($blank)
+    [Console]::WriteLine($blank)
+    [Console]::SetCursorPosition(0, $script:_pbRow)
+    $script:_pbRow = -1
+}
+
+# ------------------------------------------------
+
+Write-Host ""
+$lines = @(
+    ' _______          _________ _______    _______  _______  _______ ',
+    '(  ___  )|\     /|\__   __/(  ___  )  (  ____ \(  ____ \(  ____ \',
+    '| (   ) || )   ( |   ) (   | (   ) |  | (    \/| (    \/| (    \/',
+    '| (___) || |   | |   | |   | |   | |  | |      | |      | |      ',
+    '|  ___  || |   | |   | |   | |   | |  | | ____ | |      | |      ',
+    '| (   ) || |   | |   | |   | |   | |  | | \_  )| |      | |      ',
+    '| )   ( || (___) |   | |   | (___) |  | (___) || (____/\| (____/\',
+    '|/     \|(_______)   )_(   (_______)  (_______)(_______/(_______/'
+)
+
+$split = 38
+
+foreach ($line in $lines) {
+    [Console]::ForegroundColor = [ConsoleColor]::Yellow
+    [Console]::Write($line.Substring(0, $split))
+    [Console]::ForegroundColor = [ConsoleColor]::Cyan
+    [Console]::WriteLine($line.Substring($split))
+}
+
+[Console]::ResetColor()
+Write-Host ""
 
 $InstallDir = "C:\mingw64"
 $BinPath    = "$InstallDir\mingw64\bin"
@@ -53,24 +109,23 @@ try {
         $readStream = $response.GetResponseStream()
         $fileStream = [System.IO.File]::Create($ZipFile)
         try {
-            $buffer = New-Object byte[] (1MB)
+            $buffer    = New-Object byte[] (1MB)
             $totalRead = 0
-            $read = 0
+            $read      = 0
             $downloadStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
             while (($read = $readStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
                 $fileStream.Write($buffer, 0, $read)
                 $totalRead += $read
                 $elapsedSeconds = [math]::Max(0.001, $downloadStopwatch.Elapsed.TotalSeconds)
-                $speedMBps = ($totalRead / 1MB) / $elapsedSeconds
+                $speedMBps      = ($totalRead / 1MB) / $elapsedSeconds
                 if ($totalBytes -gt 0) {
-                    $pct = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
-                    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' `
-                        -Status ("{0}% | {1:N1} MB/s" -f $pct, $speedMBps) `
-                        -PercentComplete $pct
+                    $pct     = [math]::Min(100, [int](100L * $totalRead / $totalBytes))
+                    $doneMB  = '{0:N2}' -f ($totalRead / 1MB)
+                    $totalMB = '{0:N2}' -f ($totalBytes / 1MB)
+                    Show-ProgressBar -Status "Downloaded $doneMB MB of $totalMB MB | Speed: $($speedMBps.ToString('N2')) MB/s" -Percent $pct
                 } else {
-                    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' `
-                        -Status ('{0:N1} MB | {1:N1} MB/s' -f ($totalRead / 1MB), $speedMBps) `
-                        -PercentComplete -1
+                    $doneMB = '{0:N2}' -f ($totalRead / 1MB)
+                    Show-ProgressBar -Status "Downloaded $doneMB MB | Speed: $($speedMBps.ToString('N2')) MB/s" -Percent -1
                 }
             }
         } finally {
@@ -81,7 +136,7 @@ try {
         $response.Dispose()
     }
 } finally {
-    Write-Progress -Id 1 -Activity 'Downloading Mingw-w64' -Completed
+    Clear-ProgressBar
 }
 
 Write-Host "  Download finished." -ForegroundColor Green
@@ -107,13 +162,11 @@ try {
         }
         [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
         $pct = if ($n -gt 0) { [math]::Min(100, [int](100 * $i / $n)) } else { 100 }
-        Write-Progress -Id 2 -Activity 'Extracting Mingw-w64' `
-            -Status ("{0}%" -f $pct) `
-            -PercentComplete $pct
+        Show-ProgressBar -Status "Extracting file $i of $n ($pct%)" -Percent $pct
     }
 } finally {
     $archive.Dispose()
-    Write-Progress -Id 2 -Activity 'Extracting Mingw-w64' -Completed
+    Clear-ProgressBar
 }
 
 Write-Host "  Extraction finished." -ForegroundColor Green
@@ -125,23 +178,21 @@ $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($CurrentPath -notlike "*$BinPath*") {
     Write-Host ""
     $pathSteps = 22
-    $applyAt = [math]::Ceiling($pathSteps / 2)
-    $applied = $false
+    $applyAt   = [math]::Ceiling($pathSteps / 2)
+    $applied   = $false
     for ($s = 1; $s -le $pathSteps; $s++) {
         if (-not $applied -and $s -ge $applyAt) {
             [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
             $applied = $true
         }
         $pct = [math]::Min(100, [int](100 * $s / $pathSteps))
-        Write-Progress -Id 3 -Activity 'Updating user PATH' `
-            -Status ("{0}%" -f $pct) `
-            -PercentComplete $pct
+        Show-ProgressBar -Status "Updating user PATH ($pct%)" -Percent $pct
         Start-Sleep -Milliseconds 38
     }
     if (-not $applied) {
         [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$BinPath", "User")
     }
-    Write-Progress -Id 3 -Activity 'Updating user PATH' -Completed
+    Clear-ProgressBar
     Write-Host "PATH Updated" -ForegroundColor Green
 }
 
@@ -150,13 +201,3 @@ Write-Host "GCC is at: $BinPath\gcc.exe" -ForegroundColor Green
 Write-Host "`nRestart PowerShell and test:" -ForegroundColor Yellow
 Write-Host "   gcc --version"
 Write-Host "   g++ --version`n"
-
-$shamsColors = @('DarkRed', 'DarkYellow', 'DarkGreen', 'DarkCyan', 'DarkMagenta')
-$shamsLetters = 'SHAMS'.ToCharArray()
-
-Write-Host "`nMade by " -ForegroundColor Cyan -NoNewline
-for ($i = 0; $i -lt $shamsLetters.Length; $i++) {
-    $isLast = ($i -eq $shamsLetters.Length - 1)
-    Write-Host $shamsLetters[$i] -ForegroundColor $shamsColors[$i] -NoNewline:(-not $isLast)
-}
-Write-Host "`n"
