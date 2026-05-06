@@ -5,12 +5,8 @@
 # Auto-elevate to Administrator if not already running as one
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Restarting as Administrator..." -ForegroundColor Yellow
-    $tempScript = "$env:TEMP\shams_gcc_temp.ps1"
-    $scriptUrl  = "https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1"
-    Invoke-RestMethod -Uri $scriptUrl -OutFile $tempScript
     $shellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
-    Start-Process $shellExe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`""
+    Start-Process $shellExe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     exit
 }
 
@@ -50,7 +46,7 @@ function Show-ProgressBar {
 
     # --- line 2: [ ooo...   ] ---
     [Console]::SetCursorPosition(0, $script:_pbRow + 1)
-    [Console]::Write('[' + ('o' * $filled) + (' ' * $empty) + ']')
+    [Console]::Write('[' + ('0' * $filled) + (' ' * $empty) + ']')
     $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White   # restore default
 }
 
