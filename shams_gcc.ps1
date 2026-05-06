@@ -33,9 +33,9 @@ function Show-ProgressBar {
 
     # Reserve two lines on first call
     if ($script:_pbRow -lt 0) {
-        $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y
         Write-Host ""   
         Write-Host ""   
+        $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y - 2
     }
 
     # --- line 1: status text ---
