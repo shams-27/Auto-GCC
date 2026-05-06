@@ -87,6 +87,19 @@ foreach ($line in $lines) {
 [Console]::ResetColor()
 Write-Host ""
 
+# ================================================
+# Check if GCC is already installed
+# ================================================
+$existingGcc = Get-Command gcc -ErrorAction SilentlyContinue
+if ($existingGcc) {
+    $gccDir = Split-Path -Path $existingGcc.Path
+    Write-Host "GCC is already available on this system." -ForegroundColor Green
+    Write-Host "Found directory: $gccDir" -ForegroundColor Cyan
+    Write-Host "Skipping installation process.`n" -ForegroundColor Yellow
+    exit
+}
+# ================================================
+
 $InstallDir = "C:\mingw64"
 $BinPath    = "$InstallDir\mingw64\bin"
 $Url        = "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.1.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.1.0-mingw-w64ucrt-14.0.0-r1.zip"
