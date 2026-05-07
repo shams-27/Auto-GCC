@@ -1,23 +1,21 @@
-# ⚙️ One-Line GCC Soution for Windows
+# ⚙️ One-Line GCC Solution for Windows
 
 Instantly installs **GCC / G++ (MinGW-w64)** on Windows with a single PowerShell command. No manual downloading, no PATH headaches.
 
-
-
-https://github.com/user-attachments/assets/5374a805-1275-4af4-ac3f-0600ba4d42ea
-
-
+https://github.com/user-attachments/assets/99c99933-1953-4bfd-bdee-943dbb8b04c0
 
 ---
 
 ## 🚀 Quick Install
 
-Open **Windows Terminal / PowerShell** (any version) , copy the command given under and press Enter:
+Open **Windows Terminal / PowerShell** (any version), copy the command below and press Enter:
 
 ```powershell
 irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1 | iex
 ```
+
 **Or (Shortened URL)**
+
 ```powershell
 irm https://bit.ly/shams_gcc | iex
 ```
@@ -28,10 +26,24 @@ irm https://bit.ly/shams_gcc | iex
 
 ## ✅ What It Does
 
-1. **Downloads** the latest MinGW-w64 toolchain (GCC 16.1.0) from [winlibs](https://winlibs.com/)
-2. **Extracts** it to `C:\mingw64`
-3. **Adds** `C:\mingw64\mingw64\bin` to your **User PATH** automatically
-4. Cleans up the temporary zip file
+1. **Downloads** the MinGW-w64 toolchain (GCC 16.1.0) from [winlibs](https://winlibs.com/) using the fastest available method
+2. **Verifies** the download with a SHA-256 checksum — auto-retries up to 3 times if corrupted
+3. **Extracts** it to `C:\mingw64`
+4. **Adds** `C:\mingw64\mingw64\bin` to your **User PATH** automatically
+5. **Cleans up** all temporary files
+6. **Reports** total install time on completion
+
+---
+
+## ⚡ Download Speed
+
+The installer tries three strategies in order, falling back automatically if one fails:
+
+| Strategy | Method | Speed |
+|---|---|---|
+| **1. aria2c** | 16 parallel connections | 🚀 Fastest |
+| **2. Parallel chunks** | 8 simultaneous streams (pure PowerShell) | ⚡ Fast |
+| **3. Single stream** | 8 MB buffer, optimised fallback | ✅ Reliable |
 
 ---
 
@@ -45,6 +57,7 @@ g++ --version
 ```
 
 You should see output like:
+
 ```
 gcc (GCC) 16.1.0 ...
 ```
@@ -58,7 +71,9 @@ To completely remove GCC/G++ and all related toolchain files, run:
 ```powershell
 irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc_remove.ps1 | iex
 ```
+
 **Or (Shortened URL)**
+
 ```powershell
 irm https://bit.ly/gcc_remove | iex
 ```
@@ -95,6 +110,7 @@ The remover will:
 | **Architecture** | x86\_64 |
 | **Install Location** | `C:\mingw64` |
 | **Binary Path** | `C:\mingw64\mingw64\bin` |
+| **SHA-256** | `325771F545E89F62C0E1FAFDBF0066CC49E3321AECA7B704C8D065E97A72F2FB` |
 | **Source** | [winlibs by brechtsanders](https://github.com/brechtsanders/winlibs_mingw) |
 
 ---
@@ -108,12 +124,14 @@ The remover will:
 
 ---
 
-## 🛡️ Safety Notes
+## 🛡️ Safety & Reliability
 
-- The installer only modifies your **User PATH** — not the system-wide PATH.
-- Extraction is protected against **zip slip attacks** (files outside the install directory are refused).
-- The remover shows a full preview and asks for confirmation before deleting anything.
-- No third-party tools or package managers required.
+- **Checksum verified** — SHA-256 is checked after every download; corrupted files are deleted and retried automatically (up to 3 attempts)
+- **Zip slip protection** — files attempting to extract outside `C:\mingw64` are refused
+- **Clean failure recovery** — if extraction fails mid-way, the partial install is removed so the next run always starts fresh
+- **User PATH only** — the installer never touches the system-wide PATH
+- **No leftovers** — temporary files (ZIP, aria2c) are deleted after use
+- **No third-party tools or package managers required**
 
 ---
 
