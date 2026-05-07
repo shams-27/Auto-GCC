@@ -2,6 +2,8 @@
 # shams_gcc.ps1 - Simple GCC Installer
 # ================================================
 
+Clear-Host
+
 # Auto-elevate to Administrator if not already running as one
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
