@@ -16,6 +16,8 @@ param(
     [string[]]$ExtraPath
 )
 
+Clear-Host
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = 'SilentlyContinue'
