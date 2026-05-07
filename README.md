@@ -4,7 +4,7 @@ Instantly installs **GCC / G++ (MinGW-w64)** on Windows with a single PowerShell
 
 
 
-https://github.com/user-attachments/assets/f6b3a43b-9810-4d22-9468-5582f029f7c2
+https://github.com/user-attachments/assets/5374a805-1275-4af4-ac3f-0600ba4d42ea
 
 
 
