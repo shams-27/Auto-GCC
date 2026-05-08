@@ -126,8 +126,6 @@ $downloaded = $false
 # ================================================
 # STRATEGY 1: aria2c — 16 parallel connections
 # ================================================
-
-# Print "Preparing..." before aria2c fetch so there's no silent gap
 Write-Host "Preparing download..." -ForegroundColor Cyan
 
 # Fetch aria2c itself if not already cached
@@ -166,7 +164,7 @@ if (Test-Path $Aria2Exe) {
                                       "--summary-interval=1 " +
                                       "--dir=`"$env:TEMP`" --out=winlibs.zip `"$Url`""
         $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError  = $true   # FIX 4: captured so we can surface errors
+        $psi.RedirectStandardError  = $true   
         $psi.UseShellExecute        = $false
         $psi.CreateNoWindow         = $true
 
@@ -190,7 +188,7 @@ if (Test-Path $Aria2Exe) {
         $proc.WaitForExit()
         Clear-ProgressBar
 
-        # FIX 4: surface any stderr output on failure
+        # Surface any stderr output on failure
         $stderrText = $stderrJob.Result.Trim()
         if ($proc.ExitCode -eq 0 -and (Test-Path $ZipFile)) {
             $downloaded = $true
@@ -205,7 +203,7 @@ if (Test-Path $Aria2Exe) {
         Write-Host "  aria2c failed: $_, falling back..." -ForegroundColor DarkGray
         if (Test-Path $ZipFile) { Remove-Item $ZipFile -Force }
     } finally {
-        # FIX 1: clean up aria2c exe after use
+        # Clean up aria2c exe after use
         Remove-Item $Aria2Exe -Force -ErrorAction SilentlyContinue
     }
 } else {
