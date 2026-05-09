@@ -40,7 +40,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 # ================================================
-# Progress Bar Helpers  (winget-style)
+# Progress Bar Helpers  
 # ================================================
 # Tracks the console row where the progress bar is anchored.
 # -1 means no progress bar is currently displayed.
