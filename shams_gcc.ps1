@@ -40,55 +40,77 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 # ================================================
-# Progress Bar Helpers
+# Progress Bar Helpers  (winget-style)
 # ================================================
 # Tracks the console row where the progress bar is anchored.
 # -1 means no progress bar is currently displayed.
 $script:_pbRow = -1
 
-# Draws or refreshes a two-line progress bar in the console:
-#   Line 1: status text (padded/truncated to window width), shown in cyan
-#   Line 2: filled bar using '0' characters with spaces for the empty portion
+# Draws or refreshes a two-line winget-style progress bar:
 #
-# If $Percent is negative the bar is rendered fully filled (indeterminate mode).
-# On the first call, two blank lines are reserved and their row is recorded.
+#   Line 1 (status):  status text in cyan, right-aligned percentage in white
+#   Line 2 (bar):     [████████████░░░░░░░░░░░░]
+#
+# Fill character  : U+2588 FULL BLOCK  (█)
+# Empty character : U+2591 LIGHT SHADE (░)
+#
+# If $Percent is negative the bar pulses in indeterminate mode (fully filled,
+# shown in DarkCyan instead of Cyan to distinguish it visually).
+#
+# On the first call, two blank lines are reserved and the row is recorded.
 function Show-ProgressBar {
     param(
         [string]$Status,   # Descriptive text shown above the bar
         [int]   $Percent   # 0–100 completion level; negative = indeterminate
     )
 
-    $winWidth = $Host.UI.RawUI.WindowSize.Width
-    # Inner bar width leaves room for the '[' and ']' brackets
-    $barInner = [Math]::Max(10, $winWidth - 3)
+    $winWidth  = $Host.UI.RawUI.WindowSize.Width
 
-    # Calculate filled vs empty segments
-    $filled = if ($Percent -lt 0) {
-        $barInner   # Indeterminate: fill the entire bar
+    # ── Line 1: status + percentage ──────────────────────────────────────────
+    $pctLabel = if ($Percent -lt 0) { '  --  ' } else { "$Percent%" }
+    # Right-align the percentage: reserve enough space at the end for "100%"
+    $pctPad   = 5   # max width of "100%" + one leading space
+    $statusWidth = [Math]::Max(1, $winWidth - 1 - $pctPad)
+    # Truncate/pad the status text to fit its allocated width
+    $statusStr = if ($Status.Length -gt $statusWidth) {
+        $Status.Substring(0, $statusWidth)
+    } else {
+        $Status.PadRight($statusWidth)
     }
-    else {
+    $pctStr = $pctLabel.PadLeft($pctPad)
+
+    # ── Line 2: bar graphic ───────────────────────────────────────────────────
+    # Reserve 2 chars for '|' and '|', 1 char margin → inner width
+    $barInner = [Math]::Max(10, $winWidth - 3)
+    $indeterminate = $Percent -lt 0
+    $filled = if ($indeterminate) {
+        $barInner
+    } else {
         [Math]::Min($barInner, [int](($barInner * $Percent) / 100))
     }
-    $empty = $barInner - $filled
+    $empty  = $barInner - $filled
+    $bar    = '|' + ([char]0x2588 -as [string]) * $filled + ([char]0x2591 -as [string]) * $empty + '|'
 
-    # On the first call, record the current cursor row and reserve two lines
+    # ── Reserve two lines on first call ──────────────────────────────────────
     if ($script:_pbRow -lt 0) {
         $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y
-        Write-Host ""
-        Write-Host ""
+        [Console]::WriteLine()
+        [Console]::WriteLine()
     }
 
-    # Overwrite line 1 with status text (cyan)
+    # ── Render line 1 ────────────────────────────────────────────────────────
     [Console]::SetCursorPosition(0, $script:_pbRow)
-    $padded = $Status.PadRight($winWidth - 1).Substring(0, $winWidth - 1)
-    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::Cyan
-    [Console]::Write($padded)
+    $Host.UI.RawUI.ForegroundColor = if ($indeterminate) { [ConsoleColor]::DarkCyan } else { [ConsoleColor]::Cyan }
+    [Console]::Write($statusStr)
+    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White
+    [Console]::Write($pctStr)
 
-    # Overwrite line 2 with the bar graphic
+    # ── Render line 2 ────────────────────────────────────────────────────────
     [Console]::SetCursorPosition(0, $script:_pbRow + 1)
-    [Console]::Write('[' + ('0' * $filled) + (' ' * $empty) + ']')
+    $Host.UI.RawUI.ForegroundColor = if ($indeterminate) { [ConsoleColor]::DarkBlue } else { [ConsoleColor]::Blue }
+    [Console]::Write($bar)
 
-    # Reset to default console color
+    # ── Reset color ──────────────────────────────────────────────────────────
     $Host.UI.RawUI.ForegroundColor = [ConsoleColor]::White
 }
 
@@ -98,7 +120,7 @@ function Clear-ProgressBar {
     if ($script:_pbRow -lt 0) { return }  # Nothing to clear
 
     $winWidth = $Host.UI.RawUI.WindowSize.Width
-    $blank = ' ' * ($winWidth - 1)
+    $blank    = ' ' * ($winWidth - 1)
 
     [Console]::SetCursorPosition(0, $script:_pbRow)
     [Console]::WriteLine($blank)
