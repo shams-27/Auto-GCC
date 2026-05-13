@@ -46,18 +46,6 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # -1 means no progress bar is currently displayed.
 $script:_pbRow = -1
 
-# Draws or refreshes a two-line winget-style progress bar:
-#
-#   Line 1 (status):  status text in cyan, right-aligned percentage in white
-#   Line 2 (bar):     [████████████░░░░░░░░░░░░]
-#
-# Fill character  : U+2588 FULL BLOCK  (█)
-# Empty character : U+2591 LIGHT SHADE (░)
-#
-# If $Percent is negative the bar pulses in indeterminate mode (fully filled,
-# shown in DarkCyan instead of Cyan to distinguish it visually).
-#
-# On the first call, two blank lines are reserved and the row is recorded.
 function Show-ProgressBar {
     param(
         [string]$Status,   # Descriptive text shown above the bar
@@ -89,11 +77,12 @@ function Show-ProgressBar {
         [Math]::Min($barInner, [int](($barInner * $Percent) / 100))
     }
     $empty  = $barInner - $filled
-    $bar    = '|' + ([char]0x2588 -as [string]) * $filled + ([char]0x2591 -as [string]) * $empty + '|'
+    $bar    = ([char]0x2584 -as [string]) * $filled + ([char]0x20 -as [string]) * $empty
 
     # ── Reserve two lines on first call ──────────────────────────────────────
     if ($script:_pbRow -lt 0) {
         $script:_pbRow = $Host.UI.RawUI.CursorPosition.Y
+        [Console]::CursorVisible = $false
         [Console]::WriteLine()
         [Console]::WriteLine()
     }
@@ -126,6 +115,7 @@ function Clear-ProgressBar {
     [Console]::WriteLine($blank)
     [Console]::WriteLine($blank)
     [Console]::SetCursorPosition(0, $script:_pbRow)
+    [Console]::CursorVisible = $true
 
     $script:_pbRow = -1  # Mark bar as not active
 }
