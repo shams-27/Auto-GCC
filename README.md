@@ -1,10 +1,12 @@
-# One‑Line GCC (MinGW‑w64) Solution for Windows
+# shams_gcc — Automated GCC Toolchain Installer for Windows
 
-This project provides a single PowerShell command to install **GCC / G++ (MinGW‑w64)** on Windows. It is designed for fast setup on new or freshly configured machines—no manual downloads and no PATH guesswork.
+A single PowerShell command to install the latest GCC/G++ toolchain (WinLibs MinGW-w64) on Windows. Designed for fast, reliable setup on new or freshly configured machines with no manual downloads, no PATH guesswork, and no leftover files.
 
-## Quick install
+---
 
-Open **Windows Terminal (Admin)** (or regular Windows Terminal; the script will prompt for elevation if required), then run:
+## Quick Install
+
+Open **Windows Terminal** or **PowerShell** (the script self-elevates if Administrator rights are needed), then run:
 
 ```powershell
 irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc.ps1 | iex
@@ -16,43 +18,54 @@ Short link:
 irm https://bit.ly/shams_gcc | iex
 ```
 
-## What it does
+---
 
-- **Downloads** the MinGW‑w64 toolchain (GCC 16.1.0) from [winlibs](https://winlibs.com/)
-- **Verifies** the download using a SHA‑256 checksum (retries up to 3 times on corruption)
-- **Extracts** to `C:\mingw64`
-- **Adds** `C:\mingw64\mingw64\bin` to the **User PATH**
-- **Cleans up** temporary files
-- **Reports** total install time
+## What It Does
 
-## Download strategy
+1. **Resolves** the latest WinLibs MinGW-w64 release automatically via the GitHub Releases API — no hardcoded version numbers.
+2. **Checks** for an existing GCC installation on the current PATH and exits cleanly if one is found.
+3. **Downloads** the x86_64 POSIX SEH UCRT toolchain archive using the fastest available method (see Download Strategies below).
+4. **Verifies** the archive against its SHA-256 checksum; retries up to 3 times on corruption or failure.
+5. **Extracts** to `C:\mingw64` with zip-slip path traversal protection.
+6. **Registers** `C:\mingw64\mingw64\bin` in the current user's PATH — machine-level PATH is never modified.
+7. **Cleans up** all temporary files (archive, aria2c binary).
+8. **Reports** the resolved GCC version, binary location, and total installation time.
 
-The installer tries the following methods in order and falls back automatically:
+---
 
-| Priority | Method | Notes |
+## Download Strategies
+
+The installer attempts the following methods in order, falling back automatically on failure:
+
+| Priority | Method | Details |
 |---:|---|---|
-| 1 | **aria2c** (16 connections) | Fastest when available |
-| 2 | **Parallel chunk download** (PowerShell) | High throughput without extra tooling |
-| 3 | **Single stream** (PowerShell) | Most compatible fallback |
+| 1 | **aria2c** | 16 parallel connections for maximum throughput. The aria2c binary is bootstrapped automatically from its GitHub release and cached in `%TEMP%`. |
+| 2 | **Parallel chunk downloader** | 8 concurrent HTTP range-request workers implemented in pure PowerShell. No additional tooling required. |
+| 3 | **Single-stream download** | `HttpWebRequest` with an 8 MB buffer. Most compatible fallback for restricted environments. |
 
-## Verify installation
+---
 
-After the script completes, **restart PowerShell**, then run:
+## Verify Installation
+
+After the script completes, restart PowerShell and run:
 
 ```powershell
 gcc --version
 g++ --version
 ```
 
-Expected output includes:
+Expected output:
 
-```text
-gcc (GCC) 16.1.0 ...
 ```
+gcc (GCC) 16.x.x ...
+g++ (GCC) 16.x.x ...
+```
+
+---
 
 ## Uninstall
 
-To remove GCC/G++ and related toolchain files, run:
+To remove the GCC toolchain, run:
 
 ```powershell
 irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc_remove.ps1 | iex
@@ -64,57 +77,67 @@ Short link:
 irm https://bit.ly/gcc_remove | iex
 ```
 
-### What the remover does
+### What the Remover Does
 
-- Detects common GCC toolchain layouts (WinLibs, MSYS2, TDM‑GCC, and standard MinGW paths)
-- Previews planned removals (PATH entries and directories) before changes
-- Removes PATH entries from **User** and/or **Machine** scope (Machine scope requires Admin)
-- Deletes toolchain folders (e.g. `C:\mingw64`, `C:\msys64`, etc.)
-- Broadcasts the environment change so new terminals pick it up
+- Detects common GCC toolchain layouts: WinLibs, MSYS2, TDM-GCC, and standard MinGW paths.
+- Previews all planned removals (PATH entries and directories) before making any changes.
+- Removes PATH entries from User and/or Machine scope (Machine scope requires Administrator).
+- Deletes the toolchain directory (e.g. `C:\mingw64`).
+- Broadcasts the environment change so new terminal sessions pick it up immediately.
 
-### Remover options
+### Remover Options
 
 | Flag | Description |
 |---|---|
-| `-Scope User` | Only clean the User PATH (default: `All`) |
-| `-Scope Machine` | Only clean the Machine PATH (requires Admin) |
-| `-Scope All` | Clean both User and Machine PATH |
-| `-Force` | Skip confirmation prompts |
-| `-ExtraPath <paths>` | Extra PATH fragments to force-remove |
+| `-Scope User` | Remove GCC from the User PATH only (default: `All`) |
+| `-Scope Machine` | Remove GCC from the Machine PATH only (requires Administrator) |
+| `-Scope All` | Remove GCC from both User and Machine PATH |
+| `-Force` | Skip all confirmation prompts |
+| `-ExtraPath <paths>` | Force-remove additional PATH fragments |
 
-## Package details
+---
+
+## Toolchain Details
 
 | Property | Value |
 |---|---|
-| GCC version | 16.1.0 |
-| Toolchain | MinGW‑w64 UCRT (posix, SEH) |
-| Architecture | x86_64 |
+| Toolchain | WinLibs MinGW-w64 |
+| Variant | x86_64, POSIX threads, SEH exceptions, UCRT runtime |
+| GCC version | Resolved at runtime from the latest GitHub release |
 | Install location | `C:\mingw64` |
-| Binary path added to PATH | `C:\mingw64\mingw64\bin` |
-| SHA‑256 | `325771F545E89F62C0E1FAFDBF0066CC49E3321AECA7B704C8D065E97A72F2FB` |
-| Source | [winlibs by brechtsanders](https://github.com/brechtsanders/winlibs_mingw) |
+| PATH entry added | `C:\mingw64\mingw64\bin` |
+| PATH scope | User only (machine PATH is not modified) |
+| Source | [brechtsanders/winlibs_mingw](https://github.com/brechtsanders/winlibs_mingw) |
+
+---
 
 ## Requirements
 
-- Windows 10 or later
-- PowerShell 5.1+ or PowerShell 7+
-- Internet connection
-- ~400 MB free disk space
+- Windows 10 or Windows 11 (x86_64)
+- PowerShell 5.1 or PowerShell 7+
+- Active internet connection
+- Approximately 400 MB of free disk space
 
-## Safety and reliability
+Administrator privileges are required and requested automatically via self-elevation if the session does not already hold them.
 
-- **Checksum verification**: SHA‑256 is validated after download; corrupt files are deleted and retried (up to 3 attempts).
-- **Path safety**: the installer updates **User PATH** only (no system-wide PATH changes).
-- **Cleanup**: temporary files (ZIP, aria2c) are removed after completion.
-- **Failure recovery**: partial extractions are cleaned up so reruns start from a known state.
+---
 
-## Demo
-**View in fullscreen for better rendering.**
+## Safety and Reliability
 
-https://github.com/user-attachments/assets/1bef662e-9bb7-40c4-8a27-d560f2700f25
+**Dynamic version resolution.** The installer queries the GitHub Releases API at runtime to select the latest WinLibs release. The script never needs to be updated to track new GCC versions.
 
+**Checksum verification.** The SHA-256 hash is fetched from the companion `.sha256` asset alongside the archive. If the computed digest does not match, the corrupt file is deleted and the download is retried (up to 3 attempts). Verification is skipped with a warning only when no hash asset is available for a given release.
+
+**Zip-slip protection.** Each archive entry's resolved path is validated against the installation root before extraction. Entries that would write outside `C:\mingw64` cause an immediate, clean abort.
+
+**User PATH only.** The installer writes to the User-scoped PATH registry key. System-wide environment variables are never touched.
+
+**Idempotent.** If GCC is already present on the PATH, the installer detects it, displays the existing location and version, and exits without making any changes.
+
+**Automatic cleanup.** The downloaded archive and the bootstrapped aria2c binary are removed from `%TEMP%` after a successful installation. Partial extractions are cleaned up on failure so subsequent runs always start from a known state.
+
+---
 
 ## Author
 
 Made by [Shams](https://github.com/ShamsKabir).
-
