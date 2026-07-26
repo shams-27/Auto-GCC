@@ -68,7 +68,7 @@ g++ (GCC) 16.x.x ...
 To remove the GCC toolchain, run:
 
 ```powershell
-irm https://raw.githubusercontent.com/ShamsKabir/tools/main/shams_gcc_remove.ps1 | iex
+irm https://raw.githubusercontent.com/shams-27/tools/main/shams_gcc_remove.ps1 | iex
 ```
 
 Short link:
