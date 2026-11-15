@@ -1,4 +1,4 @@
-# shams_gcc — Automated GCC Toolchain Installer for Windows
+# Automated GCC Toolchain Installer for Windows
 
 A single PowerShell command to install the latest GCC/G++ toolchain (WinLibs MinGW-w64) on Windows. Designed for fast, reliable setup on new or freshly configured machines with no manual downloads, no PATH guesswork, and no leftover files.
 
