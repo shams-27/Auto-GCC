@@ -43,6 +43,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The scripts draw a full-screen console UI that is invisible in CI logs.
+      # This wrapper runs a script, records a transcript, and prints any
+      # uncaught error (with stack trace) so failures can be diagnosed.
+      - name: Create wrapper
+        shell: pwsh
+        run: |
+          @'
+          param(
+            [Parameter(Mandatory)][string]$Script,
+            [Parameter(Mandatory)][string]$Log,
+            [switch]$Force
+          )
+          Start-Transcript -Path $Log -Force | Out-Null
+          Write-Host "PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))"
+          $code = 0
+          try {
+            $global:LASTEXITCODE = 0
+            if ($Force) { & $Script -Force } else { & $Script }
+            $code = $global:LASTEXITCODE
+          } catch {
+            Write-Host "UNCAUGHT EXCEPTION:"
+            Write-Host ($_ | Out-String)
+            Write-Host "Position: $($_.InvocationInfo.PositionMessage)"
+            Write-Host "Stack:`n$($_.ScriptStackTrace)"
+            $code = 1
+          }
+          Stop-Transcript | Out-Null
+          exit $code
+          '@ | Set-Content -Path "$env:RUNNER_TEMP\wrap.ps1" -Encoding UTF8
+
       # The runner image ships with GCC (MinGW, MSYS2, Strawberry Perl, ...).
       # Move the usual install folders out of the way so the installer starts
       # from a clean machine and the remover has nothing big to delete.
@@ -58,8 +88,6 @@ jobs:
             }
           }
 
-      # The scripts draw a full-screen console UI, which fails without a real
-      # console. Start-Process gives each run its own (hidden) console window.
       - name: Run installer
         shell: pwsh
         run: |
@@ -70,10 +98,14 @@ jobs:
           if (Get-Command gcc -ErrorAction SilentlyContinue) { throw 'gcc is still on PATH' }
 
           $script = (Resolve-Path .\shams_gcc.ps1).Path
+          $log    = Join-Path $env:RUNNER_TEMP 'installer.log'
           $sw = [Diagnostics.Stopwatch]::StartNew()
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
-                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:RUNNER_TEMP\wrap.ps1",'-Script',$script,'-Log',$log
           Write-Host "Installer exit code: $($p.ExitCode) after $($sw.Elapsed)"
+          Write-Host '----- transcript -----'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host '(no transcript produced)' }
+          Write-Host '----------------------'
           if ($p.ExitCode -ne 0) { throw "Installer exited with code $($p.ExitCode)" }
 
       - name: Verify install
@@ -103,9 +135,11 @@ jobs:
         run: |
           $env:Path = "C:\mingw64\mingw64\bin;$env:Path"
           $script = (Resolve-Path .\shams_gcc.ps1).Path
+          $log    = Join-Path $env:RUNNER_TEMP 'installer2.log'
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
-                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:RUNNER_TEMP\wrap.ps1",'-Script',$script,'-Log',$log
           Write-Host "Second run exit code: $($p.ExitCode)"
+          if (Test-Path $log) { Get-Content $log }
           if ($p.ExitCode -ne 0) { throw "Second run exited with code $($p.ExitCode)" }
           if (-not (Test-Path C:\mingw64\mingw64\bin\gcc.exe)) { throw 'Second run damaged the install' }
 
@@ -118,9 +152,13 @@ jobs:
           }) -join ';'
 
           $script = (Resolve-Path .\shams_gcc_remove.ps1).Path
+          $log    = Join-Path $env:RUNNER_TEMP 'remover.log'
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
-                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script,'-Force'
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:RUNNER_TEMP\wrap.ps1",'-Script',$script,'-Log',$log,'-Force'
           Write-Host "Remover exit code: $($p.ExitCode)"
+          Write-Host '----- transcript -----'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host '(no transcript produced)' }
+          Write-Host '----------------------'
           if ($p.ExitCode -ne 0) { throw "Remover exited with code $($p.ExitCode)" }
 
       - name: Verify removal
