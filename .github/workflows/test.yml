@@ -98,6 +98,8 @@ jobs:
           if (Get-Command gcc -ErrorAction SilentlyContinue) { throw 'gcc is still on PATH' }
 
           $script = (Resolve-Path .\shams_gcc.ps1).Path
+          # A child Windows PowerShell 5.1 must not inherit PowerShell 7's module path
+          if ('${{ matrix.shell }}' -eq 'powershell') { $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath','Machine') }
           $log    = Join-Path $env:RUNNER_TEMP 'installer.log'
           $sw = [Diagnostics.Stopwatch]::StartNew()
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
@@ -135,6 +137,7 @@ jobs:
         run: |
           $env:Path = "C:\mingw64\mingw64\bin;$env:Path"
           $script = (Resolve-Path .\shams_gcc.ps1).Path
+          if ('${{ matrix.shell }}' -eq 'powershell') { $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath','Machine') }
           $log    = Join-Path $env:RUNNER_TEMP 'installer2.log'
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
                  -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:RUNNER_TEMP\wrap.ps1",'-Script',$script,'-Log',$log
@@ -152,6 +155,7 @@ jobs:
           }) -join ';'
 
           $script = (Resolve-Path .\shams_gcc_remove.ps1).Path
+          if ('${{ matrix.shell }}' -eq 'powershell') { $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath','Machine') }
           $log    = Join-Path $env:RUNNER_TEMP 'remover.log'
           $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
                  -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"$env:RUNNER_TEMP\wrap.ps1",'-Script',$script,'-Log',$log,'-Force'
