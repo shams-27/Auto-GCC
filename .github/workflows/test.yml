@@ -35,6 +35,7 @@ jobs:
   install-test:
     name: Install / uninstall (Windows, ${{ matrix.shell }})
     runs-on: windows-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -42,31 +43,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner image already ships with GCC, and the installer exits early
-      # if gcc is on PATH. Remove it so the real install path is exercised.
-      - name: Remove preinstalled GCC
+      # The runner image ships with GCC (MinGW, MSYS2, Strawberry Perl, ...).
+      # Move the usual install folders out of the way so the installer starts
+      # from a clean machine and the remover has nothing big to delete.
+      - name: Prepare clean machine
         shell: pwsh
         run: |
-          Get-Command gcc -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }
-          if (Test-Path C:\mingw64) { Remove-Item C:\mingw64 -Recurse -Force }
-          # Make sure no leftover gcc dirs are in the persisted user/machine PATH
-          foreach ($scope in 'User', 'Machine') {
-            $p = [Environment]::GetEnvironmentVariable('Path', $scope)
-            if ($p) {
-              $clean = ($p -split ';' | Where-Object { $_ -and ($_ -notmatch 'mingw|msys|gcc') }) -join ';'
-              try { [Environment]::SetEnvironmentVariable('Path', $clean, $scope) } catch { Write-Host "skip $scope : $_" }
+          foreach ($d in 'C:\mingw64','C:\mingw32','C:\mingw','C:\msys64','C:\winlibs','C:\tdm-gcc') {
+            if (Test-Path $d) {
+              try {
+                Rename-Item -Path $d -NewName ((Split-Path $d -Leaf) + '.runner-bak') -ErrorAction Stop
+                Write-Host "Moved $d"
+              } catch { Write-Warning "Could not move $d : $_" }
             }
           }
 
+      # The scripts draw a full-screen console UI, which fails without a real
+      # console. Start-Process gives each run its own (hidden) console window.
       - name: Run installer
         shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # The installer exits early if gcc is on PATH, so drop every dir that has gcc.exe
+          $env:Path = ($env:Path -split ';' | Where-Object {
+            $_ -and -not [IO.File]::Exists([IO.Path]::Combine($_, 'gcc.exe'))
+          }) -join ';'
+          if (Get-Command gcc -ErrorAction SilentlyContinue) { throw 'gcc is still on PATH' }
+
+          $script = (Resolve-Path .\shams_gcc.ps1).Path
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Installer exited with code $LASTEXITCODE" }
-          Write-Host "Installer finished in $($sw.Elapsed)"
+          $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script
+          Write-Host "Installer exit code: $($p.ExitCode) after $($sw.Elapsed)"
+          if ($p.ExitCode -ne 0) { throw "Installer exited with code $($p.ExitCode)" }
 
       - name: Verify install
         shell: pwsh
@@ -81,27 +89,39 @@ jobs:
           if ($mach -like "*$bin*")    { throw 'Machine PATH was modified' }
 
           # Compile and run a real program
-          $env:Path = "$bin;$env:Path"
-          gcc --version
-          g++ --version
+          & "$bin\gcc.exe" --version
+          & "$bin\g++.exe" --version
           Set-Content hello.c '#include <stdio.h>
           int main(void){ puts("hello from gcc"); return 0; }'
-          gcc hello.c -o hello.exe
+          & "$bin\gcc.exe" hello.c -o hello.exe
+          if ($LASTEXITCODE -ne 0) { throw 'gcc failed to compile hello.c' }
           $out = .\hello.exe
           if ($out -ne 'hello from gcc') { throw "Unexpected output: $out" }
 
-      - name: Idempotency (second run should exit cleanly)
+      - name: Second run exits cleanly (already installed)
         shell: pwsh
         run: |
           $env:Path = "C:\mingw64\mingw64\bin;$env:Path"
-          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Second run exited with code $LASTEXITCODE" }
+          $script = (Resolve-Path .\shams_gcc.ps1).Path
+          $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script
+          Write-Host "Second run exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "Second run exited with code $($p.ExitCode)" }
+          if (-not (Test-Path C:\mingw64\mingw64\bin\gcc.exe)) { throw 'Second run damaged the install' }
 
       - name: Run remover
         shell: pwsh
         run: |
-          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc_remove.ps1 -Force
-          if ($LASTEXITCODE -ne 0) { throw "Remover exited with code $LASTEXITCODE" }
+          # Only target our install, not the other compilers the runner has on PATH
+          $env:Path = ($env:Path -split ';' | Where-Object {
+            $_ -and -not [IO.File]::Exists([IO.Path]::Combine($_, 'gcc.exe'))
+          }) -join ';'
+
+          $script = (Resolve-Path .\shams_gcc_remove.ps1).Path
+          $p = Start-Process ${{ matrix.shell }} -PassThru -Wait -WindowStyle Hidden `
+                 -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$script,'-Force'
+          Write-Host "Remover exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "Remover exited with code $($p.ExitCode)" }
 
       - name: Verify removal
         shell: pwsh
@@ -109,3 +129,12 @@ jobs:
           if (Test-Path C:\mingw64) { throw 'C:\mingw64 still exists' }
           $user = [Environment]::GetEnvironmentVariable('Path', 'User')
           if ($user -like '*mingw64*') { throw 'User PATH still has mingw64' }
+
+      - name: Debug state on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host "C:\mingw64 exists : $(Test-Path C:\mingw64)"
+          Write-Host "gcc.exe exists    : $(Test-Path C:\mingw64\mingw64\bin\gcc.exe)"
+          Write-Host "User PATH         : $([Environment]::GetEnvironmentVariable('Path','User'))"
+          Get-ChildItem C:\ -Directory | Select-Object -ExpandProperty Name
