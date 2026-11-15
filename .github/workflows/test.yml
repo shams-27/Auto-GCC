@@ -1,0 +1,109 @@
+name: Test installer
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Syntax + lint (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in 'shams_gcc.ps1', 'shams_gcc_remove.ps1') {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile("$PWD/$f", [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $failed = $true; Write-Host "$f : FAILED"; $errs | Format-List } else { Write-Host "$f : OK" }
+          }
+          if ($failed) { exit 1 }
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $r = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning
+          $r | Format-Table -AutoSize
+          if ($r | Where-Object Severity -eq 'Error') { exit 1 }
+
+  install-test:
+    name: Install / uninstall (Windows, ${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]   # Windows PowerShell 5.1 and PowerShell 7+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image already ships with GCC, and the installer exits early
+      # if gcc is on PATH. Remove it so the real install path is exercised.
+      - name: Remove preinstalled GCC
+        shell: pwsh
+        run: |
+          Get-Command gcc -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }
+          if (Test-Path C:\mingw64) { Remove-Item C:\mingw64 -Recurse -Force }
+          # Make sure no leftover gcc dirs are in the persisted user/machine PATH
+          foreach ($scope in 'User', 'Machine') {
+            $p = [Environment]::GetEnvironmentVariable('Path', $scope)
+            if ($p) {
+              $clean = ($p -split ';' | Where-Object { $_ -and ($_ -notmatch 'mingw|msys|gcc') }) -join ';'
+              try { [Environment]::SetEnvironmentVariable('Path', $clean, $scope) } catch { Write-Host "skip $scope : $_" }
+            }
+          }
+
+      - name: Run installer
+        shell: ${{ matrix.shell }}
+        env:
+          # Fresh process, so the stripped PATH above applies
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          & .\shams_gcc.ps1
+          Write-Host "Installer finished in $($sw.Elapsed)"
+
+      - name: Verify install
+        shell: pwsh
+        run: |
+          $bin = 'C:\mingw64\mingw64\bin'
+          if (-not (Test-Path "$bin\gcc.exe")) { throw "gcc.exe not found in $bin" }
+
+          # PATH entry must be in the USER scope only
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          $mach = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          if ($user -notlike "*$bin*") { throw 'User PATH missing toolchain entry' }
+          if ($mach -like "*$bin*")    { throw 'Machine PATH was modified' }
+
+          # Compile and run a real program
+          $env:Path = "$bin;$env:Path"
+          gcc --version
+          g++ --version
+          Set-Content hello.c '#include <stdio.h>
+          int main(void){ puts("hello from gcc"); return 0; }'
+          gcc hello.c -o hello.exe
+          $out = .\hello.exe
+          if ($out -ne 'hello from gcc') { throw "Unexpected output: $out" }
+
+      - name: Idempotency (second run should exit cleanly)
+        shell: ${{ matrix.shell }}
+        run: |
+          $env:Path = "C:\mingw64\mingw64\bin;$env:Path"
+          & .\shams_gcc.ps1
+
+      - name: Run remover
+        shell: ${{ matrix.shell }}
+        run: |
+          & .\shams_gcc_remove.ps1 -Force
+
+      - name: Verify removal
+        shell: pwsh
+        run: |
+          if (Test-Path C:\mingw64) { throw 'C:\mingw64 still exists' }
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($user -like '*mingw64*') { throw 'User PATH still has mingw64' }
