@@ -59,13 +59,13 @@ jobs:
           }
 
       - name: Run installer
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         env:
-          # Fresh process, so the stripped PATH above applies
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          & .\shams_gcc.ps1
+          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Installer exited with code $LASTEXITCODE" }
           Write-Host "Installer finished in $($sw.Elapsed)"
 
       - name: Verify install
@@ -91,15 +91,17 @@ jobs:
           if ($out -ne 'hello from gcc') { throw "Unexpected output: $out" }
 
       - name: Idempotency (second run should exit cleanly)
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: |
           $env:Path = "C:\mingw64\mingw64\bin;$env:Path"
-          & .\shams_gcc.ps1
+          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Second run exited with code $LASTEXITCODE" }
 
       - name: Run remover
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: |
-          & .\shams_gcc_remove.ps1 -Force
+          & ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\shams_gcc_remove.ps1 -Force
+          if ($LASTEXITCODE -ne 0) { throw "Remover exited with code $LASTEXITCODE" }
 
       - name: Verify removal
         shell: pwsh
