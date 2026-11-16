@@ -361,17 +361,17 @@ function Render-Dashboard {
     if ($Pct -ge 0) {
         $detailText = if ($Detail) { $Detail } else { "" }
         $pctText    = "$Pct%"
-        
+
         # Left side gets 4 spaces padding; Right side has percentage
         $leftBase   = "    $detailText"
-        
+
         # Total usable space between borders is exactly $INNER_W
         $maxLeftSpace = $INNER_W - $pctText.Length
-        
+
         if ($leftBase.Length -gt $maxLeftSpace) {
             $leftBase = $leftBase.Substring(0, $maxLeftSpace - 3) + "..."
         }
-        
+
         # Pad the left side so that string length + percentage length exactly equals $INNER_W
         $leftPadded = $leftBase.PadRight($maxLeftSpace)
 
@@ -536,12 +536,12 @@ function Draw-Final([bool]$success, [string]$binPath, [string]$elapsed) {
 function Tick-Spinner {
     $frame = $script:SpinFrame % 8
     $script:SpinFrame++
-    
+
     $ringChar = $script:SpinRing[$frame]
-    
+
     $savedX = [Console]::CursorLeft
     $savedY = [Console]::CursorTop
-    
+
     # Write only the spinning ring character at its fixed column (column 3,
     # phase label row). The saved cursor position is restored afterwards so
     # subsequent output continues from the correct location.
@@ -549,7 +549,7 @@ function Tick-Spinner {
     $prev = [Console]::ForegroundColor
     [Console]::ForegroundColor = [ConsoleColor]::DarkYellow
     [Console]::Write($ringChar)
-    
+
     # Restore the cursor to its position before this call.
     [Console]::ForegroundColor = $prev
     [Console]::SetCursorPosition($savedX, $savedY)
@@ -588,18 +588,55 @@ $Aria2Url   = "https://github.com/aria2/aria2/releases/download/release-1.37.0/a
 $totalSw = [System.Diagnostics.Stopwatch]::StartNew()
 
 # =============================================================================
+# Release Lookup (API with HTML fallback)
+# =============================================================================
+# The unauthenticated GitHub API allows only 60 requests/hour per IP, which
+# shared networks (labs, campuses) exhaust easily. On failure, fall back to the
+# regular github.com pages, which are not subject to that limit, and build the
+# same {tag_name, assets[name, browser_download_url]} shape the rest of the
+# script expects. Set $env:GITHUB_TOKEN to authenticate API calls if desired.
+function Get-LatestRelease {
+    $ua = 'shams_gcc-installer/2.0'
+    try {
+        $h = @{ 'User-Agent' = $ua; 'Accept' = 'application/vnd.github+json' }
+        if ($env:GITHUB_TOKEN) { $h['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+        return Invoke-RestMethod -Uri "https://api.github.com/repos/brechtsanders/winlibs_mingw/releases/latest" -Headers $h -ErrorAction Stop
+    } catch {
+        Add-LogWarn "GitHub API unavailable - using web fallback"
+        $req = [System.Net.HttpWebRequest]::Create("https://github.com/brechtsanders/winlibs_mingw/releases/latest")
+        $req.UserAgent = $ua
+        $req.AllowAutoRedirect = $false
+        $resp = $req.GetResponse()
+        $loc  = $resp.Headers['Location']
+        $resp.Dispose()
+        $tag  = ($loc -split '/')[-1]
+
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add('User-Agent', $ua)
+        $html = $wc.DownloadString("https://github.com/brechtsanders/winlibs_mingw/releases/expanded_assets/$tag")
+        $wc.Dispose()
+
+        $assets = @([regex]::Matches($html, 'href="(/brechtsanders/winlibs_mingw/releases/download/[^"]+)"') | ForEach-Object {
+            [PSCustomObject]@{
+                name                 = [System.IO.Path]::GetFileName($_.Groups[1].Value)
+                browser_download_url = "https://github.com" + $_.Groups[1].Value
+            }
+        })
+        return [PSCustomObject]@{ tag_name = $tag; assets = $assets }
+    }
+}
+
+# =============================================================================
 # Dynamic Release Resolution
 # =============================================================================
-# Queries the GitHub Releases API for the latest WinLibs MinGW-w64 build,
-# selects the x86_64 POSIX SEH UCRT ZIP asset, and retrieves the corresponding
-# SHA-256 hash from the accompanying .sha256 file. The installer proceeds with
-# these values so it always installs the most recent available toolchain.
+# Queries the latest WinLibs MinGW-w64 release, selects the x86_64 POSIX SEH
+# UCRT ZIP asset, and retrieves the corresponding SHA-256 hash from the
+# accompanying .sha256 file. The installer proceeds with these values so it
+# always installs the most recent available toolchain.
 Update-Progress "Resolving" "Querying GitHub Releases API..." "Fetching latest WinLibs release metadata" 2 -Spin
 
 try {
-    $apiUrl   = "https://api.github.com/repos/brechtsanders/winlibs_mingw/releases/latest"
-    $headers  = @{ 'User-Agent' = 'shams_gcc-installer/2.0'; 'Accept' = 'application/vnd.github+json' }
-    $release  = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
+    $release  = Get-LatestRelease
 
     # Select the x86_64 / POSIX / SEH / UCRT ZIP asset.
     $asset = $release.assets | Where-Object {
