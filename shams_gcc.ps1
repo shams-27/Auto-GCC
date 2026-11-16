@@ -1,5 +1,5 @@
 # =============================================================================
-# shams_gcc.ps1  —  Automated GCC Toolchain Installer for Windows
+# shams_gcc.ps1  -  Automated GCC Toolchain Installer for Windows
 # =============================================================================
 #
 # OVERVIEW
@@ -13,15 +13,20 @@
 #   Source  : https://github.com/brechtsanders/winlibs_mingw
 #
 # DOWNLOAD STRATEGIES  (attempted in priority order)
-#   1. aria2c           — 16 parallel connections for maximum throughput
-#   2. Chunk downloader — 8 parallel HTTP range-request workers (fallback)
-#   3. Single-stream    — HttpWebRequest with an 8 MB buffer (last resort)
+#   1. aria2c           - 16 parallel connections for maximum throughput
+#   2. Chunk downloader - 8 parallel HTTP range-request workers (fallback)
+#   3. Single-stream    - HttpWebRequest with an 8 MB buffer (last resort)
+#
+# BUILD AS EXE
+#   Install-Module ps2exe -Scope CurrentUser
+#   Invoke-ps2exe .\shams_gcc.ps1 .\shams_gcc.exe -requireAdmin -title "Auto GCC Installer" -version 2.0.0.0
 #
 # REQUIREMENTS
 #   - Windows 10 / 11 (x86_64)
 #   - PowerShell 5.1 or later
 #   - Active internet connection
-#   - Administrator privileges (the script self-elevates when needed)
+#   - Administrator privileges (the script self-elevates when run as .ps1;
+#     the compiled .exe is elevated by its embedded UAC manifest)
 # =============================================================================
 
 Set-StrictMode -Off
@@ -30,10 +35,11 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # Privilege Escalation
 # =============================================================================
-# Detects whether the current session holds Administrator rights. If not, the
-# script relaunches itself in an elevated process using the most capable
-# PowerShell host available (pwsh preferred over powershell).
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+# Only applies when running as a .ps1 ($PSCommandPath is empty inside a
+# ps2exe-compiled .exe, which is elevated by its manifest instead). If the
+# session is not Administrator, relaunch in an elevated process using the most
+# capable PowerShell host available (pwsh preferred over powershell).
+if ($PSCommandPath -and -not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $shellExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
     Start-Process $shellExe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
@@ -100,8 +106,8 @@ $B = @{
     BF = [char]0x2022  # black circle
     BH = [char]0x2593  # dark shade (bar medium)
     BE = [char]0x00B7  # middle dot
-    DT = [char]0x203A  # ›  single right angle quotation (bullet)
-    AR = [char]0x00BB  # »  right double angle quotation (prompt arrow)
+    DT = [char]0x203A  # single right angle quotation (bullet)
+    AR = [char]0x00BB  # right double angle quotation (prompt arrow)
     CK = '+'           # + check
     XX = '-'           # - cross
     IN = [char]0x003E  # >  greater-than (info bullet)
@@ -130,6 +136,15 @@ function Write-CL([ConsoleColor]$fg, [string]$text) {
     [Console]::ForegroundColor = $fg
     [Console]::WriteLine($text)
     [Console]::ForegroundColor = $prev
+}
+
+# Restores the cursor, waits for Enter so the window stays open (the compiled
+# .exe closes immediately otherwise), then exits with the given code.
+function Wait-Exit([int]$code) {
+    [Console]::CursorVisible = $true
+    [Console]::WriteLine("  Press Enter to exit...")
+    [void][Console]::ReadLine()
+    exit $code
 }
 
 # =============================================================================
@@ -218,7 +233,7 @@ function Draw-Header([switch]$Redraw) {
 
     Draw-Separator
 
-    # Info rows — GCC version is populated after release resolution; a
+    # Info rows - GCC version is populated after release resolution; a
     # placeholder is shown if the header is drawn before resolution completes.
     $displayVer = if ($script:ResolvedVersion) { $script:ResolvedVersion } else { "Resolving latest release..." }
     Draw-KeyVal "GCC"      $displayVer                                $C.VersionFg
@@ -235,16 +250,16 @@ function Draw-Header([switch]$Redraw) {
 # on every progress update without scrolling the terminal.
 #
 # Row layout (relative to $script:DashY):
-#   0     ─ Phase separator
-#   1     │ Phase label + spinner
-#   2     ─ Separator
-#   3     │ Status message
-#   4     │ Detail / transfer-speed line
-#   5     │ Progress bar
-#   6     │ Percentage / indeterminate indicator
-#   7     ─ Log separator
-#   8…N   │ Scrolling log entries  ($script:MaxLogLines rows)
-#   N+1   ╰ Bottom border
+#   0     - Phase separator
+#   1     | Phase label + spinner
+#   2     - Separator
+#   3     | Status message
+#   4     | Detail / transfer-speed line
+#   5     | Progress bar
+#   6     | Percentage / indeterminate indicator
+#   7     - Log separator
+#   8...N | Scrolling log entries  ($script:MaxLogLines rows)
+#   N+1   - Bottom border
 
 $script:DashY       = 0
 $script:DashH       = 0
@@ -257,7 +272,7 @@ $script:LogLines    = [System.Collections.Generic.List[object]]::new()
 $script:MaxLogLines = 5
 $script:SpinFrame   = 0
 # Synchronized 8-frame Braille spinner arrays that produce a chasing-dot effect.
-# SpinRing: Seven-dot ring with one absent dot — the gap advances each frame.
+# SpinRing: Seven-dot ring with one absent dot - the gap advances each frame.
 $script:SpinRing = @([char]0x28FE, [char]0x28F7, [char]0x28EF, [char]0x28DF, [char]0x287F, [char]0x28BF, [char]0x28FB, [char]0x28FD)
 # SpinDot: Single accent dot that fills the gap, completing the illusion of motion.
 $script:SpinDot  = @([char]0x2801, [char]0x2808, [char]0x2810, [char]0x2820, [char]0x2880, [char]0x2840, [char]0x2804, [char]0x2802)
@@ -269,16 +284,16 @@ $script:SpinDot  = @([char]0x2801, [char]0x2808, [char]0x2810, [char]0x2820, [ch
 function Init-Dashboard {
     $script:DashY = [Console]::CursorTop
     # Dashboard layout:
-    #   0  ─ phase separator
-    #   1  │ phase label row
-    #   2  ─ separator
-    #   3  │ status row
-    #   4  │ detail row
-    #   5  │ progress bar row
-    #   6  │ pct / speed row
-    #   7  ─ separator
+    #   0  - phase separator
+    #   1  | phase label row
+    #   2  - separator
+    #   3  | status row
+    #   4  | detail row
+    #   5  | progress bar row
+    #   6  | pct / speed row
+    #   7  - separator
     #   8..12  log rows (MaxLogLines)
-    #   last ╰ bottom border
+    #   last - bottom border
     $script:DashH = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + $script:MaxLogLines + 1
     # Emit blank lines to reserve the dashboard region in the console buffer.
     for ($i = 0; $i -lt $script:DashH; $i++) { [Console]::WriteLine() }
@@ -313,7 +328,7 @@ function Render-Dashboard {
 
     $row = $script:DashY
 
-    # ── Phase header ─────────────────────────────────────────────────────────
+    # -- Phase header -------------------------------------------------------
     Set-XY 0 $row
     Draw-Separator
     $row++
@@ -334,13 +349,13 @@ function Render-Dashboard {
     Draw-Separator
     $row++
 
-    # ── Status ───────────────────────────────────────────────────────────────
+    # -- Status -------------------------------------------------------------
     Set-XY 0 $row
     $statusStr = "  $($B.AR) $Status"
     Draw-Row $statusStr $C.StatusFg
     $row++
 
-    # ── Detail + Percentage (Safe Alignment - Fixed Border Gap) ──────────────
+    # -- Detail + Percentage (Safe Alignment - Fixed Border Gap) ------------
     Set-XY 0 $row
 
     if ($Pct -ge 0) {
@@ -367,7 +382,7 @@ function Render-Dashboard {
     }
     $row++
 
-    # ── Progress bar ─────────────
+    # -- Progress bar -------------------------------------------------------
     Set-XY 0 $row
     $barWidth = $INNER_W
     if ($Pct -ge 0) {
@@ -382,12 +397,12 @@ function Render-Dashboard {
     }
     $row++
 
-    # ── Log separator ────────────────────────────────────────────────────────
+    # -- Log separator ------------------------------------------------------
     Set-XY 0 $row
     Draw-Separator
     $row++
 
-    # ── Log lines ────────────────────────────────────────────────────────────
+    # -- Log lines ----------------------------------------------------------
     $logStart = $row
     $displayed = @($script:LogLines)
     if ($displayed.Count -gt $script:MaxLogLines) {
@@ -408,7 +423,7 @@ function Render-Dashboard {
     }
     $row += $script:MaxLogLines
 
-    # ── Bottom border ────────────────────────────────────────────────────────
+    # -- Bottom border ------------------------------------------------------
     Set-XY 0 $row
     Draw-HLine $B.BL $B.BR
 }
@@ -428,8 +443,8 @@ function Add-LogInfo([string]$msg) { Add-Log $msg ([char]0x003E) $C.AccentFg }
 # =============================================================================
 # Replaces the live dashboard with a static success or failure summary panel.
 # The most recent log entries are displayed beneath the panel so the operator
-# can review the outcome without scrolling. After rendering, the user is
-# prompted to press Enter before the terminal window closes.
+# can review the outcome without scrolling. Callers follow this with Wait-Exit
+# so the terminal window stays open until the user presses Enter.
 function Draw-Final([bool]$success, [string]$binPath, [string]$elapsed) {
     $row = $script:DashY
 
@@ -490,8 +505,9 @@ function Draw-Final([bool]$success, [string]$binPath, [string]$elapsed) {
 
     Set-XY 0 $row; Draw-Separator; $row++
     for ($li = 0; $li -lt $script:MaxLogLines; $li++) {
-        $entry = if ($li -lt $script:LogLines.Count) {
-            $script:LogLines[$script:LogLines.Count - $script:MaxLogLines + $li]
+        $idx = $script:LogLines.Count - $script:MaxLogLines + $li
+        $entry = if ($idx -ge 0 -and $idx -lt $script:LogLines.Count) {
+            $script:LogLines[$idx]
         } else { $null }
         Set-XY 0 ($row + $li)
         if ($null -ne $entry) {
@@ -629,6 +645,7 @@ try {
 } catch {
     Add-LogErr "Release resolution failed: $_"
     Draw-Final $false "" ""
+    Wait-Exit 1
 }
 
 # Update the header panel to reflect the resolved version.
@@ -650,10 +667,10 @@ Update-Progress "Pre-flight Check" "Scanning PATH for existing GCC..." "" 10 -Sp
 $existingGcc = Get-Command gcc -ErrorAction SilentlyContinue
 if ($existingGcc) {
     $gccDir     = Split-Path -Path $existingGcc.Path
-    $gccVersion = (& gcc --version 2>&1 | Select-Object -First 1).Trim()
+    $gccVersion = (& gcc --version 2>&1 | Select-Object -First 1).ToString().Trim()
     $totalSw.Stop()
 
-    # ── Render an "already installed" final screen ───────────────────────────
+    # -- Render an "already installed" final screen -------------------------
     $colSuccess    = $C.Success
     $colPathFg     = $C.PathFg
     $colVersionFg  = $C.VersionFg
@@ -705,7 +722,7 @@ if ($existingGcc) {
     Set-XY 0 $row
     [Console]::CursorVisible = $true
     [Console]::WriteLine()
-    exit 0
+    Wait-Exit 0
 }
 
 Add-LogInfo "No GCC on PATH - starting fresh install"
@@ -727,7 +744,7 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
     $downloaded = $false
 
     # -------------------------------------------------------------------------
-    # Strategy 1: aria2c — 16 Parallel Connections
+    # Strategy 1: aria2c - 16 Parallel Connections
     # -------------------------------------------------------------------------
     # aria2c is bootstrapped on first use by downloading its portable release
     # ZIP from GitHub, extracting the executable, and caching it in %TEMP% for
@@ -825,7 +842,7 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
     }
 
     # -------------------------------------------------------------------------
-    # Strategy 2: Parallel Chunk Downloader — 8 Workers
+    # Strategy 2: Parallel Chunk Downloader - 8 Workers
     # -------------------------------------------------------------------------
     # Issues a HEAD request to determine file size and final redirect URL,
     # then spawns 8 background jobs each responsible for a distinct byte range.
@@ -988,6 +1005,18 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
     }  # end Strategy 3 if block
 
     # -------------------------------------------------------------------------
+    # Download Guard
+    # -------------------------------------------------------------------------
+    # If every strategy failed, retry the whole cycle; after the final attempt,
+    # show the failure screen. Prevents the checksum step from touching a
+    # missing archive.
+    if (-not $downloaded -or -not (Test-Path $ZipFile)) {
+        if ($attempt -lt $MaxRetries) { continue }
+        Draw-Final $false "" ""
+        Wait-Exit 1
+    }
+
+    # -------------------------------------------------------------------------
     # SHA-256 Integrity Verification
     # -------------------------------------------------------------------------
     # Computes the SHA-256 digest of the downloaded archive and compares it
@@ -1004,6 +1033,7 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
             Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
             if ($attempt -lt $MaxRetries) { continue }
             Draw-Final $false "" ""
+            Wait-Exit 1
         }
         Add-LogOK "SHA-256 verified  -  archive is intact"
     } else {
@@ -1012,6 +1042,12 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
     break
 
 } # end retry loop
+
+# Safety net: never proceed to extraction without an archive.
+if (-not (Test-Path $ZipFile)) {
+    Draw-Final $false "" ""
+    Wait-Exit 1
+}
 
 # =============================================================================
 # Archive Extraction
@@ -1071,6 +1107,7 @@ try {
     if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue }
     Remove-Item $ZipFile -Force -ErrorAction SilentlyContinue
     Draw-Final $false "" ""
+    Wait-Exit 1
 }
 
 Add-LogOK "Extracted $n files to $InstallDir"
@@ -1109,3 +1146,4 @@ $elapsedStr = if ($elapsed.TotalMinutes -ge 1) {
 Add-LogOK "All done in $elapsedStr - GCC is ready"
 
 Draw-Final $true $BinPath $elapsedStr
+Wait-Exit 0
