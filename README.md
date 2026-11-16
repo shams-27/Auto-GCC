@@ -9,15 +9,8 @@ A single PowerShell command to install the latest GCC/G++ toolchain (WinLibs Min
 Open **Windows Terminal** or **PowerShell** (the script self-elevates if Administrator rights are needed), then run:
 
 ```powershell
-irm https://raw.githubusercontent.com/shams-27/tools/main/shams_gcc.ps1 | iex
+irm https://raw.githubusercontent.com/shams-27/Auto-GCC/main/shams_gcc.ps1 | iex
 ```
-
-Short link:
-
-```powershell
-irm https://bit.ly/shams_gcc | iex
-```
-
 ---
 
 ## What It Does
