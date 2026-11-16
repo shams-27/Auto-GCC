@@ -1,0 +1,43 @@
+name: Build EXE
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build exe
+        shell: pwsh
+        run: |
+          Install-Module ps2exe -Scope CurrentUser -Force
+          Invoke-ps2exe .\shams_gcc.ps1 .\shams_gcc.exe -requireAdmin `
+            -title "Auto GCC Installer" -version 2.0.0.0
+
+      - name: Build setup wizard
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" setup.iss
+
+      - name: Hash setup
+        shell: pwsh
+        run: (Get-FileHash .\Output\shams_gcc_setup.exe -Algorithm SHA256).Hash | Out-File shams_gcc_setup.exe.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shams_gcc_setup
+          path: |
+            Output/shams_gcc_setup.exe
+            shams_gcc_setup.exe.sha256
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Output/shams_gcc_setup.exe
+            shams_gcc_setup.exe.sha256
